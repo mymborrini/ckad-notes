@@ -1,0 +1,75 @@
+AUTHENTICATION:
+
+So we have different type of users:
+
+ . Admin which access the cluster to perfomr adminstration task
+ . Developer which access the cluster to test or deploy applications
+ . End Users which access the application deployed on the cluster
+ . We have third part application accessing the cluster for integration purpouses.
+
+
+Now End Users which access the application are authenticated by the application itself, so we take them out of discussion
+
+So we are left with two type of users:
+Human (Admins, Developers) => User
+Robots => Service Account
+
+K8s does not manage User account natively but it relies on external source like a file with user details or certificates or third part (like LDAP) to manage this user.
+
+However in case of service account you can create it and so manage it internally in k8s.
+
+
+For now let's focus on userAccount.
+Users can access the kube-apiserver through:
+ . kubectl
+ . curl https://kube-server-ip:6443/
+
+Both of  them must be authenticated, how kube-apiServer authenticate?
+We can have a list of Username and Password with a static password file.
+Or Username and Token in a static token file
+You can authenticate using certificates
+Connect to third part authentication protocol like LDAP
+
+Let's start with the first one:
+You can create a csv file:
+
+user-details.csv
+password123,user1,u0001
+password123,user2,u0002
+password123,user3,u0003
+password123,user4,u0004
+password123,user5,u0005
+
+Password, username and userId, you can pass the fileName as an option to the kube-apiserver
+--basic-auth-file=user-details.csv
+
+You can do it in a command imperative command or even in the kube api server pod definition file. They are probably both covered in the CKA course.
+
+So when you access k8s cluster 
+curl -v -k https://master-node-ip:6443/api/v1/pods -u "user1:password123"
+
+We can even have a fourth colum to assign user to specific group
+password123,user1,u0001,group1
+password123,user2,u0002,group2
+password123,user3,u0003,group2
+password123,user4,u0004,group1
+password123,user5,u0005,group2
+
+
+The second one (the static token file) is pretty similar except that you have a token instead of a password
+ghjklkjhghjkcacbahcakb,user1,u0001,group1
+cvewvnwoivnwivwnknasmc,user2,u0002,group2
+ascacsalcnalcnlascllsc,user3,u0003,group2
+clamckmascoamnocasconc,user4,u0004,group1
+wejioiwjbonwnvÖ<ÖVIJOW,user5,u0005,group2
+
+--token-auth-file=user-details.csv
+
+When you authenitcate you specify the token as an Authorization Bearer Token 
+curl -v -k https://master-node-ip:6443/api/v1/pods --header "Authorization: Bearer rfzuioiuztjuikj"
+
+N.B.
+Both of them are not the recommended approach
+. This is not a recommended authentication mechanism
+. Consider volume mount while providing the auth file in a kubeadm setup
+. Setup Role Based Authorization for the new users.

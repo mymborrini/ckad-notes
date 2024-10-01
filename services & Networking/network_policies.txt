@@ -1,0 +1,314 @@
+Network Policies:
+
+There are generally two kind of traffic: ingress and egress
+
+Ingress and egress only refered to direction which the traffic is originated. The direction is of course something related to the
+single k8s resource, so service, pods ecc...
+
+	CLients	     
+           ingress  |
+		    V
+		    80		
+		------------
+		  WebServer
+		------------
+		     ^	
+	   ingress  ||  egress
+		    V
+		  5000
+		------------
+		|  API  |
+		------------
+	  	     ^	
+	   ingress  ||  egress
+		    V
+		  3600
+		------------
+		|  DB     |
+		------------
+
+In this example let's consider the WEBSERVER we need two rules for him
+ . One for INGRESS: accept traffic at port 80
+ . One for EGRESS: allow traffic to API:5000
+
+
+For the API we need two rules as well:
+ . One for INGRESS: accept traffic at port 5000
+ . One for EGRESS: allow traffic to DB:3600
+
+
+For the DB we need a rule:
+ . One for INGRESS: accept traffic at port 3600
+
+That's the basic of traffic flow.
+
+Let's imagine the following situation in order to have a better look at Network security.
+You have 3 nodes in a cluster, these nodes are hosting several pods and services
+
+----------      --------------   ----------- 		 
+|  Pod1	      | |  Pod2	      | |   Pod4	|		 
+|  Pod3	      | |  svc2	      | |   Pod5	|		
+|  svc1	      | |	      | |   svc3	|		 
+|	      | |	      | |		|		 
+| Node1	      | | Node 2      | | Node 3		
+| 192.168.1.11| | 192.168.1.12| |  192.168.1.13 |		
+---------- 	 -------------   -----------		
+
+ Each node, pod and service has its own ip address. Whatever configuration you implement, the pods should be able to communicate
+with each other without setting any additional configuration. So for example, in the previous solution, all resources are 
+inside a virtual private network (vpn).
+
+k8s by default is "All allow" rule, so every pod can communicate with each other.
+Let's consider the first example we had and apply the "All Allow" rule:
+
+ 
+		-------------
+   	        WebServer(pod)    <-------
+		------------		 |
+		    ^			 |
+	   	    |  	   	  	 |
+		    V			 |
+		  5000			 |
+		------------		 |
+		  API (pod)		 |
+		------------		 |
+	  	    ^			 |
+	            |  	  		 |
+		    V			 |
+		  3600			 |
+		------------		 |
+		  DB (Pod)    	<---------
+		------------
+
+As you can see each every pod can communicate with each other. 
+What about if don't want to have the webServer pod communicate directly with the database
+
+
+				
+   	        WebServer(pod)    
+		------------		 
+		    ^			 
+	   	    |  	   	  	 
+		    V			 
+		  5000			 
+		------------		 
+		  API (pod)	metadata.labels.name: api-pod
+		------------		 
+	  	    ^			 
+	            |  	  		 
+		    V			 
+		  3600			 
+		------------		 
+		  DB (Pod)    metadata.labels.role: db
+		------------
+
+This is when you implements a network policy to allow traffic to the db service only from the API server
+A Network policy is another object in the k8s environment that you connect to a pod.
+
+In this case the Network policy should be something: Allow Ingress traffic from API Pod on Port 3306.
+
+As always to match the two we use labels and selectors.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+	name: db-policy
+spec:
+# First we select the pod we want to protect
+	podSelector:
+		matchLabels:
+			role: db
+# Second specify policyTypes
+	policyTypes:
+ 		- Ingress
+
+# Third create the rule
+	ingress:
+		- from
+			- podSelector:
+				matchLabels:
+					name: api-pod
+		  ports:
+			- protocol: TCP
+			  port: 3306
+
+
+
+N.B. If you don't add the Ingress policyTypes there will be no isolation.
+
+N.B It's obvious but better specify. When you allow traffic ingress to port 3306, you don't have to specify egress traffic to
+port 3306. When you allow ingress traffic the RESPONSE IS AUTOMATICALLY ALLOWED TOO.
+We do not need a separate rule for that, we don't need to worry about the response.
+Of course if the database needs for every reason to make a request to the api server, that's a different story, because this is an
+egress traffic and you have to specify a particular rule for that.
+So DO NOT MISTAKE EGRESS TRAFFIC WITH INGRESS RESPONSE.
+
+
+If we want to block all the traffic in and out from the pod:
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+	name: db-policy
+spec:
+# First we select the pod we want to protect
+	podSelector:
+		matchLabels:
+			role: db
+# Second specify policyTypes
+	policyTypes:
+ 		- Ingress
+		- Egress
+
+
+Now what about if we have different namespaces dev stagin and prod. Well first of all, if you use a namespace different then
+the default one you have to specify in the metadata. So something like this
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+	name: db-policy
+	namespace: prod
+
+If we want to communicate with other namespaces and setting rules for them.
+
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+	name: db-policy
+	namespace: prod
+spec:
+	podSelector:
+		matchLabels:
+			role: db
+	policyTypes:
+ 		- Ingress
+	ingress:
+		- from
+			- podSelector:
+				matchLabels:
+					name: api-pod
+			  namespaceSelector:
+				matchLabels:
+					name: prod
+		  ports:
+			- protocol: TCP
+			  port: 3306
+
+
+
+Now let's consider the following. We have a backup server, external to the k8s cluster.
+Backup Server: 192.168.5.10
+
+The backup server needs to be connected to the pod in order to make some operations. If we know the ip, is pretty easy to do that.
+
+	ingress:
+		- from
+			- podSelector:
+				matchLabels:
+					name: api-pod
+			  namespaceSelector:
+				matchLabels:
+					name: prod
+			- ipBlock:
+				cidr: 192.168.5.10/32
+		  ports:
+			- protocol: TCP
+			  port: 3306
+
+"from" is a list of rules and work as an OR operation, the rules could be :
+ . podSelector
+ . namespaceSelector
+ . ipBlock
+
+
+Instead inside a single rule you can specify things that are in a AND operation.
+
+For example:
+
+		- from
+			- podSelector:
+				matchLabels:
+					name: api-pod
+			  namespaceSelector:
+				matchLabels:
+					name: prod
+
+The previous one say: Allow from api-pod in namespace Prod
+
+		- from
+			- podSelector:
+				matchLabels:
+					name: api-pod
+			- namespaceSelector:
+				matchLabels:
+					name: staging
+
+The previous one say: Allow from api-pod OR from all the pods in staging.
+
+
+Now let's consider a similar scenario, but instead of having the backup server connecting to the pod, we have an agent inside the
+pod which is responsible to manage the backups.
+
+So we have to define an Egress operation to 192.168.5.10
+
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+	name: db-policy
+	namespace: prod
+spec:
+	podSelector:
+		matchLabels:
+			role: db
+	policyTypes:
+ 		- Ingress
+
+# Remember to add Egress to the policyTypes
+		- Egress
+	ingress:
+		- from
+			- podSelector:
+				matchLabels:
+					name: api-pod
+			  namespaceSelector:
+				matchLabels:
+					name: prod
+		  ports:
+			- protocol: TCP
+			  port: 3306
+	egress:
+		- to:
+			- ipBlock:
+				cidr: 192.168.5.10/32
+		  ports: 
+			- protocol: TCP
+			  port: 80
+
+
+In the terminal the shortcut for "networkpolicy" is netpol
+
+N.B. When we specify the protocol 
+protocol: TCP
+
+IT MEANS THAT NO PING WORKS, since ping does not work on protocol TCP
+
+In case of multiple endpoints: egress is something like this:
+And from is in a similar way. 
+
+	egress:
+		- to:
+			- ipBlock:
+				cidr: 192.168.5.10/32
+		  ports: 
+			- protocol: TCP
+			  port: 80
+		- to:
+			- podSelector:
+				matchLabels:
+					name: app
+		  ports: 
+			- protocol: TCP
+			  port: 8080

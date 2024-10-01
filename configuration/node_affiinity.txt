@@ -1,0 +1,81 @@
+Node Affinity:
+
+The primary feature is to ensure the pods are hosted on particular node. Node affinity gives us a list of expression to be sure
+that we placed our pod in the node we want to place them. 
+
+With great power cames great complexity
+
+So this two expression are equals:
+
+apiVersion: v1
+kind: Pod
+metadata:
+	name: myapp-pod
+spec:
+	containers:
+		- name: data-processor
+		  image: data-processor
+	nodeSelector:
+		size: Large
+
+----
+
+apiVersion:
+kind:
+
+metadata:
+	name: myapp-pod
+spec:
+	containers:
+		- name: data-processor
+		  image: data-processor
+	affinity:
+		nodeAffinity:
+			requiredDuringSchedulingIgnoredDuringExecution:
+				nodeSelectorTerms:
+					- matchExpressions:
+						- key: size
+						  operator: In
+						  values:
+						  	- Large	
+
+
+Other example:
+				nodeSelectorTerms:
+					- matchExpressions:
+						- key: size
+						  operator: NotIn
+						  values:
+						  	- Small
+
+Or if the values does not bother us.
+				nodeSelectorTerms:
+					- matchExpressions:
+						- key: size
+						  operator: Exists
+
+
+What if node affinity could not match a node with the given expression
+In this case we check the nodeAffinity that will tell us what happened if at runtime the affinity changes:
+
+There are two types on node affinity (Available)
+requiredDuringSchedulingIgnoredDuringExecution 
+preferredDuringSchedulingIgnoredDuringExecution 
+
+and one planned
+requiredDuringSchedulingRequiredDuringExecution
+
+To fully undestand these three consider that there are two lifecyle in the Pod affinity,
+ during scheduling is the pod in the state where it's not created yet
+ during execution when the pod is created and running and something change in the state of the node, for example removing
+the label or a selector.
+
+If DuringScheduling Is Required and no node has the affinity, then the node will not be scheduled.
+If DuringScheduling Is Preferred and no node has the affinity, then the node will be placed on any available nodes
+
+If DuringExecution Is Ignored any changes in node affinity will not impact them once they are scheduled and running
+If DuringExecution Is Required any node which does not meet the affinity rules even at runtime will be evicted.
+
+
+
+

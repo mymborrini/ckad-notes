@@ -1,0 +1,92 @@
+STORAGE CLASSES:
+
+In this case we create a pvc from a google cloud persistence desk, the problem is that before this pv is created you must create the disck on google cloud. Everytime an application requires a volume
+you need to create that volume on the disk and then create the pv related
+
+ . gcloud beta compute disks create --size 1GB --region us-east1 pd-disk
+
+pv-definition.yaml
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-vol1
+spec:
+  accessModes:
+    - ReadWriteOnce
+  capacity:
+    storage: 500Mi
+  gcePersistentDisk:
+    pdName: pd-disk
+    fsType: ext4
+
+It would have been nice if the volumes is provisioned automatically when the application requires it and that is when storage classes comes in.
+
+When storageClasses you can define a provisioner google storage that automatically provision storage on google cloud and attach that to pods
+when the claim is made. That is called dynamic provisioning:
+
+sc-definition.yaml
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: google-storage
+provisioner: kubernetes.io/gce-pd
+
+Now if comes back to the pod, we don't need the pvc, because everyhing is linked properly when the storage class is created.
+So the pod definition will be something like this:
+
+
+pod-definition.yaml¨
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: random-number-generator
+spec:
+  containers:
+    - image: alpine
+      name: alpine
+      command: ["/bin/sh", "-c"]
+      args: ["shuf -i 0-100 -n 1 >> /opt"]
+      volumeMounts:
+        - mountPath: /opt
+          name: data-volume
+      volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: myclaim
+
+
+pvc-definition.yaml
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: myclaim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: google-storage
+  resources:
+    requests:
+      storage: 500Mi
+
+
+
+sc-definition.yaml
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: google-storage
+provisioner: kubernetes.io/gce-pd
+parameter:
+  type: pd-standard
+  replication-type: none
+
+
+The next time the pvc is invoked, the storage class will be created inside the gcp storage automatically and it will bind the pvc to that volume
+So it just create a PV but you don't need to create PV manually anymore.
+
+Depending on the provisioner the paramterter is different

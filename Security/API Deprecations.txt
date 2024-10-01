@@ -1,0 +1,146 @@
+API DEPRECATIONS:
+
+Api Deprecations policy remove an older version which is no longer required.
+Let's image you have your own k8s addons, and want to make an integration to the official repository. 
+The pull request is accepted and now your api are under the /v1alpha1. If you want to remove some of your endpoint because they won't work so well as expected you have to follow deprecation rules:
+since the deprecation of the API follows Policy rules.
+
+Rule #1
+API elements may only be removed by incrementing the version of the API group.
+So if you want to remove your endpoint you won't be able to do it in /v1alpha1 but you have to publish /v1alpha2.
+
+At this point the resource in the database are still /v1alpha1 but the APi version is /v1alpha2. 
+This is now going to be a problem, we will need to go back and change all the ApiVersion in our yml file from v1alpha1 to v1alpha2; this is why the new release must support both v1alpha1 and v1alpha2.
+But the preferred or storage version could be v1alpha2. This means that the user can use the same yml file (the one with v1alpha1) to create resources but internally it will converted into v1alpha2.
+
+Ruke #2
+API objects must be able to round-trip between API versions in a given release without information loss, with the exception of whole REST resources that do not exists in some versions.
+If we created an object in the v1alpha1 version, then it's converted in v1alpha2 and then is reverted back in v1alpha1, then the object should be the same as the one we started with 
+
+For example:
+
+v1alpha1
+
+apiVersion: v1alpha1
+kind: Course
+metadata:
+  name: ckad
+spec:
+  type: video
+
+  ||
+  VV
+
+v1alpha2 (introduce a new field called duration)
+
+apiVersion: v1alpha2
+kind: Course
+metadata:
+  name: ckad
+spec:
+  type: video
+  duration: 
+
+  ||
+  VV
+
+v1alpha1 (when we revert back to v1alpha1 it will now have the new field)
+
+apiVersion: v1alpha1
+kind: Course
+metadata:
+  name: ckad
+spec:
+  type: video
+  duration: 
+
+
+So we have to add the new field duration in v1alpha1 so the original one will match the reverted one.
+
+Now we fix some bugs and we are now ready for beta version. So we will deploy /v1beta1  /v1beta2  and finally or first stable version /v1. Of course there is no need to keep all the API stable and working
+
+
+Rule #4a
+
+Other than the most recent API versions in each track, older API versions must be supported after thei annouced deprecation for a duration of no less than:
+
+ . GA: 12 months or 3 releases (whichever is longer)
+ . Beta: 9 months or 3 releases (whichever is longer)
+ . Alpha: 0 releases
+
+So alpha version does not need supported for any release but beta and GA must be supported.
+
+
+Example:
+
+Release n1 (Release alive /v1alpha1)
+/v1alpha1 is released
+
+Relese n2 (Release alive /v1alpha2)
+Now you move from /v1alpha1 to /v1alpha2 people who still use /v1alpha1 can have some yml be broken after the release change.
+
+Release n3 (Release alive /v1beta1)
+/v1beta1 is released, people who still use /v1alpha2 can have some yml be broken after the release change.
+
+
+Release n4 (Release alive /v1beta1, /v1beta2)
+If you then move from /v1beta1 to /v1beta2 you cannot delete /v1beta1 but you have to tag /v1beta1 as deprecated. 
+In this release /v1beta1 will still remain the preferred versions
+
+Rule #4b
+The "preferred" API version and the "storage version" for a giver grou may not advance until after a release has been made that supports both the new version and the previous version.
+
+Release n5  (Release alive /v1beta1, /v1beta2)
+Nothing change except /v1beta2 becomes the preferred and storage version
+
+
+Release n6  (Release alive /v1beta1, /v1beta2, /v1)
+We finally have the first release stable version /v1, along with that we still have /v1beta1 and /v1beta2. 
+/v1beta2 remains the preferred and storage version but now it's deprecated so the deprecated tag will be addedd to /v1beta2
+
+
+Release n7  (Release alive /v1beta2, /v1)
+We have removed /v1beta1 according to rule #4a.
+Now the preferred storage version is /v1
+
+
+Release n8  (Release alive /v1beta2, /v1)
+Nothing change
+
+
+Release n9  (Release alive /v1)
+We have removed /v1beta2 according to rule #4a.
+
+
+Now we are working with /v2alpha1
+
+Release n9  (Release alive /v1, v2alpha1)
+We introduce /v2alpha1
+In this case can we deprecate the /v1 version? NO
+
+Rule #3
+An API version in a given track may not be deprecated until a new API version at lease as stable is released.
+
+So /v2alpha since it's an alpha cannot deprecate /v1, a stable version.
+
+
+In order to convert the old yml file to the new yml file, a command exists.
+
+ . kubectl convert -f <file-name>.yml --output-version apps/v1
+
+In this case the <file-name>.yml will be coverted FROM:
+
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: ...
+
+TO
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ...
+
+N.B. kubectl convert is a plugin that must be istalled separately
+

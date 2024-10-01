@@ -1,0 +1,169 @@
+ADMISSION CONTROLLERS:
+
+So for what we've seen so far, the kubectl send a request to the Kube ApiServer, the pod is created and the information is finally persisted in the ETCD database. 
+
+KubeCtl ===> Kube ApiServer ===> Create Pod
+
+When the request hits the apiServer it goes to an authentication process, and this is generally done by using certificates.
+
+KubeCtl ===> Authentication ===> Create Pod
+
+Once authenticated the request must be authorized and this is done by using roles and clusterroles
+
+KubeCtl ===> Authentication ===> Authorization (RBAC) ===> Create Pod
+
+As we saw the RBAC is based on the k8s api level. But what if you want do more than that.
+What if, for example, you want only permit images from certain registry. For example:
+
+metadata:
+  name: web-pod
+spec:
+  containers:
+    - name: ubuntu
+      image: ubuntu:latest
+      command: ["sleep","3600"]
+      securityContext:
+        runAsUser: 0
+        capabilities:
+          add: ["MAC_ADMIN"]
+
+This should be blocked since the ubuntu registry is not something you want to pull images from.
+Or you do not want to permit runAs root user, or only permit certain capabilities, or metadata always contains labels.
+
+This is where admission controllers comes in
+
+
+KubeCtl ===> Authentication ===> Authorization (RBAC) ===> Admission Controllers ====> Create Pod
+
+There a lot of Admission Controllers available, let's see some examples:
+
+
+NAMESPACEEXISTS Admission Controller 
+does not allow you to create pod in a namespaces that does not exists, this is an admissionController enabled by default. 
+So if you run
+ . kubectl run nginx --image nginx --namespace blue 
+
+Where blue does not exists as a namespace, an error is raised.
+
+Thereis another Admission Controllers named NAMESPACEDAUTOPROVISION which is not enabled by default this will automatically created the namespace if not exists.
+
+
+
+To see the admissioncontroller enabled by default just type
+
+ . kube-apiserver -h | grep enabled-admission-plugins
+
+or better (since kube-apiserver command is generally not available if you are not in the cluster)
+
+ . kubectl exec kube-apiserver-controlplane -n kube-system -- kube-apiserver -h | grep enabled-admission-plugins
+
+
+To add an admission controller you can change the execStart in 
+/usr/local/bin/kube-apiserver
+
+ --enabled-admission-plugins=NodeRestriction,NamespaceAutoProvision
+
+or Just change the related Pod in /etc/kubernetes/manifests/kube-apiserver.yaml
+
+spec:
+  containers:
+  - command:
+    - kube-apiserver
+    - --authorization-mode=Node,RBAC
+    - --advertise-address=172.17.0.107
+    - --allow-privileged=true
+    - --enabled-bootstrap-token-auth=true
+  
+    - --enabled-admission-plugins=NodeRestriction,NamespaceAutoProvision
+    - --disable-admission-plugins=DefaultStorageClass
+
+
+
+So this is how admission controllers works, it not only accept reject user's requests but it could also makes operation in the background.
+
+N.B. NAMESPACEEXISTS and NAMESPACEDAUTOPROVISION  are deprecated right now and they are substitue with NAMESPACELIFECYCLE which assure that you cannot create namespaces at command and assure that the default
+namespace cannot be deleted
+
+
+
+VALIDATING AND MUTATING ADMISSION CONTROLLERS.
+
+
+NamespaceExists for example is a VALIDATING Admission Controller, it checks if the namespace already exists
+DefaultStorageClass will check for requests for creating a pvc and check if there is a storage class associated with it, if not it will modify your request to add the default storage class to your request. 
+
+So BEFORE:
+apiVersion: v1
+kind: PersistenVolumeClaim
+metadata:
+  name: myclaim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Mi
+ 
+AFTER:
+apiVersion: v1
+kind: PersistenVolumeClaim
+metadata:
+  name: myclaim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Mi
+  storageClassName: default
+
+This type of adission controller has known has a MUTATING admission Controller. 
+
+Generally Mutating admission controller is called before the Validating admission controller, so that the validation can take place after all the changes have been done.
+
+
+NOW, WHAT IF WE WANT OUR ADMISSION CONTROLLER, WHICH HAS IT'S OWN MUTATION OR VALIDATON LOGIC
+
+You haev to use two resources named:
+ . MUTATINGADMISSIONWEBHOOK
+ . VALIDATINGADMISSIONWEBHOOK
+
+We can configure this two webhook to point to a server ( the admissionWebhook Server ) which is either a server inside the k8s cluster or an external one.
+
+So in order to configure it we need two steps:
+ 1 Configure the AdmissionWebhook Server
+ 2 Configure k8s to point at that server
+
+1 The AdmissionWebhook Server can be written in the language you like but it 
+must have two endopoints:
+. /validate (for validation)
+. /mutate  (for mutation)
+
+
+2 Configuration on k8s cluster of the Admission webhook:
+
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration (or MutatingWebHookConfiguration)
+metadata:
+  name: "pod-policy.example.com"
+webhooks:
+  - name: "pod-policy.example.com"
+    clientConfig:
+       url: "https://external-server.example.com"
+       // or
+       service:
+         namespace: "webhook-namespace"
+	 name: "webhook-service"
+       caBundle: "Ci0tLS0t...Qk"		
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+        scope: "Namespaced"
+
+
+The rules are necessary in order to configure when to call the webhook, in the case of the example above it is created during the creation of pods
+
+To get information remember to use:
+ . k get pod -o yaml, it gives better infomraon than a k describepod <podName>

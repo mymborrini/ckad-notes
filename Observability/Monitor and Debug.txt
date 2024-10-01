@@ -1,0 +1,43 @@
+MONITOR AND DEBUG
+
+What would like to monitor?
+I like to know 
+Node level metrics such as:
+ . number of nodes
+ . how many of them are healthy
+ . CPU, memory, network and disk utilization
+
+
+Pod level metrics such as:
+ . number of pods
+ . CPU, memory 
+  
+
+So we need a solution to collect this data and analyze them.
+K8s does not come with feature for monitoring solution, however there are a lot of metrics server opensource you can use such as:
+Metrics server, Prometheus, Elastic Stack, DataDog, Dynatrace
+
+
+For now let'see Metrics server.
+
+
+Heapster was the original project that enable monitoring and analyze for k8s.
+
+Heapster is now deprecated and a slim version born named Metric Server. Online you will find a lot of reference to heapster, this is why this is somehting important to kwow.
+
+Metric Server retrieve all of the k8s nodes and pods and stores them in memory. Metrics server is just an in-memory solution and does not store anything on the disk, as a result you
+cannot se historical performance data.
+
+
+KUBELET is the k8s agent installed in each node, is responsible to receive instraction from the master. Kubelet contains also a subcomponent CADVISOR. CADVISOR is responsible to take
+all the metrics (from pods) and expose them through the kubelet api to make the metrics available to the metrics server 
+
+
+You then clone metrics-server from github and then run it as a k8s application
+ . k create -f metrics-server/deploy/1.8+/...
+
+This commands deploy a bunch of pods, service, roles ecc... to enable metrics server.  
+Then you can type 
+ . k top node (to view node performance)
+ . k top pod (to view pod performance)
+

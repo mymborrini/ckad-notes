@@ -1,0 +1,142 @@
+TAINTS AND TOLERANCE
+
+Pod and node reletionship and how you can restrain one pod to one node.
+Taints and tolerance have nothing to do with sercurity, instead are used to set restriction on which pod can be schedule on which node.
+
+Let's imagine the following we have 4 PODS A, B, C D
+
+
+	A	B	C	D
+
+---------- ---------- ----------- 
+|	 | |	    | |		|
+|	 | |	    | |		|
+|	 | |	    | |		|
+|	 | |	    | |		|
+|	 | |	    | |		|
+| Node1  | | Node 2 | |	Node 3  |
+---------- ---------- -----------
+
+
+ If we put no restriction k8s will put the pods equally in the nodes to balance operation
+
+---------- ---------- ----------- 
+|	 | |	    | |		|
+|	 | |	    | |		|
+|   D	 | |	    | |		|
+|   A 	 | |	B   | |	   C	|
+|	 | |	    | |		|
+| Node1  | | Node 2 | |	Node 3  |
+---------- ---------- -----------
+
+
+Now we have dedicated resources on Node 1 for a particular application (Application D).
+So what should we do now?
+
+ 1 Place a TAINT on node1, let's call it Taint=blue 
+
+By default no pods have tolerance against any taints so Right now no pods can be placed on Node 1
+
+---------- ---------- ----------- 
+|	 | |	    | |		|
+|	 | |	    | |		|
+|   	 | |	A   | |	   D	|
+|    	 | |	B   | |	   C	|
+|	 | |	    | |		|
+| Node1  | | Node 2 | |	Node 3  |
+---------- ---------- -----------
+
+ 2 Enable certain pods to be placed on that node, add a TOLERATION to pod D.
+
+---------- ---------- ----------- 
+|	 | |	    | |		|
+|	 | |	    | |		|
+|   	 | |	A   | |	   	|
+|   D 	 | |	C   | |	   B	|
+|	 | |	    | |		|
+| Node1  | | Node 2 | |	Node 3  |
+---------- ---------- -----------
+
+How to do it programmaticaly?
+
+How to add a TAINT to a Node:
+-----------------------------
+
+	. k taint nodes <node-name> key=value:taint-effect
+
+The key value pair is the taint itself for example if the pod is dedicated to application D the key value will be app=d
+The taint effect is the effect that happens to PODs that DO NOT TOLERATE this taint.
+
+There are 3 taint-effect:
+ NoSchedule => The pod will not schedule, this is what we have discussed until now
+ PreferNoSchedule => k8s will try to not schedule in this pod, but this is not garantee
+ NoExecute => New pod will not be scheduled on the node and existing pod will be evicted
+
+How to add a TOLERATION to a Pod:
+---------------------------------
+
+Suppose we have add a taint like the following:
+
+	. k taint nodes node 1 app=blue:NoSchedule
+
+I you want to untained a Node, simply type:
+	 . k taint nodes node 1 app=blue:NoSchedule-
+REMEMBER the dash at the end
+
+The pod yaml will look like the following:
+
+apiVersion: v1 
+kind: Pod
+metadata:
+	name: myapp-pod
+spec:
+	containers:
+		- name: nginx-container
+		  image: nginx
+	tolerations:
+		- key: "app"
+		  operator: "Equal"
+		  value: "blue"
+ 		  effect: "NoSchedule"
+
+REMEMBER all the value have to be added in double quotes
+
+
+Like I have imagined taint and tolerations are about exclusion 
+
+
+	A	B	C	D
+
+---------- ---------- ----------- 
+|	 | |	    | |		|
+|	 | |	    | |		|
+|	 | |	    | |		|
+|	 | |	    | |		|
+|	 | |	    | |		|
+| Node1  | | Node 2 | |	Node 3  |
+---------- ---------- -----------
+
+If I put t a taint=blue on node 1 and add a toleration taint=blue on POD D => There is no garantee that pod D is hosted on node 1
+
+
+---------- ---------- ----------- 
+|	 | |	    | |		|
+|	 | |	    | |		|
+|   	 | |	A   | |	   D	|
+|    	 | |	B   | |	   C	|
+|	 | |	    | |		|
+| Node1  | | Node 2 | |	Node 3  |
+---------- ---------- -----------
+
+This could be therefore also a possible configuration.
+If my goal is to specify a particular node for a particular pod, there is something called node affinity.
+
+Let's consider a fact, we now have considered only the worker node, but also the master node can hosted a pod and all the other management software.
+The schedule simply does not schedule any pod on the master node. Why?
+Because as k8s start a taint is placed on the master node to prevent any pod to be hosted by it.
+This is for best practice => If you want to see the taint of this master node just type
+
+	. kubectl describe node kubemaster | grep Taint
+
+
+

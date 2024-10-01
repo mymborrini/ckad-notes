@@ -1,0 +1,162 @@
+CRD (Custom Resource Definitions):
+
+
+What k8s intends by "Resources". When we create a deployment k8s will save it into the ETCD database.
+
+So 
+ . kubectl create -f deployment.yml => will create the deployment into the ETCD database
+ . kubectl get deployments => will list the deployments from the ETCD database
+ . kubectl delete -f deployment.yml =>   will delete the deployment from the ETCD database
+
+So this is to create, list and delete the deployment object or resource in the ETCD datasource. We know that when we create a deployment we create 3 more pods. We don't have to
+worry about it since the deployment controller will manage them for us. We don't need to create a controller because the deployment controller is already built in in k8s.
+
+The controller is a job that runs in background and its job is to continue monitoring the status of resources in ETCD and when we create update or delete a deployment it make the necessary changes on the cluster
+ to match what we have done. In this case when we create a deployment, the controller object will create a replicaSet and a number of pods as we have specified. So that's the job
+of the controller. 
+
+The deployment controller is written in go and it's part of the k8s core. 
+
+Each resources we have been looking so far have their own controller which is responsible to make the necessary changes on the cluster to maintain the state as expected.
+
+Let's do something funny. 
+
+Let's create a resource, a FlightTicket for example.
+
+apiVersion: flights.com/v1
+kind: FlightTicket
+metadata:
+ name: my-flight-ticket
+spec:
+ from: Mumbai
+ to: London
+ number: 2
+
+
+What we want to do with this configuration file?
+Is create an object of flightTicket, I want therefore to have a FlightTIcket resource to list, get and delete in case. 
+But I want to have a real flight ticket related. For example consider this API to exists https://book-flight.com/api.
+
+
+So we need to create a Controller which will monitor etcd for the creation deletion or change of the resource and then make requests to the API https://book-flight.com
+
+
+So for example, something like this
+
+package flightticket
+var controllerKind = apps.SchemeGroupVersion.WithKind("Flightticket")
+func (dc *FlightTicketController) Run(workers int, stopCh <-chan struct{})
+func (dc *FlightTicketController) callBookFlightAPI(obj interface{})
+
+
+Now we have a resource template, we have a controller but of course if you type something like:
+
+ . k create -f flighticket.yml 
+
+It will raise an exception -> no matches for kind "FlightTicket" in version "flights.com/v1"
+So we have to tell k8s before about our new resource, what we need is a CUSTOM RESOURCE DEFINITION (CRD). Something like this:
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: flighttickets.flights.com
+spec:
+  scope: Namespaced
+  group: fligths.com
+  names:
+    kind: FlightTicket
+    singular: flightticket
+    plural: flightticket
+    shortNames:
+      - ft
+  versions:
+    - name: v1
+      served: true
+      storage: true
+  schema:
+    openAPIV3Schema:   
+      type: object
+      properties:
+        spec:
+          type: object
+          properties:
+            from:
+              type: string
+            to:
+              type: string
+            number:
+              type: integer
+              minimum: 1
+              maximum: 10
+        
+    
+
+The scope is the one we saw some lectures before...
+The groups is the API groups we are going to use to create that particular resource
+The names.kind is the kind of our resource 
+
+The singular name is the one displayed in the kubectl api-resource command 
+The plural is what it is used by the k8s api-resource
+
+
+We can have multiple versions for each resource and we have to choose between those versions which are the one "preferred" (served) and the one for "storage"
+
+openAPIV3Schema defines which fields are supported.
+
+Now we can simply type:
+ . k create -f flightticket-custom-definiton.yml
+
+and now we are able to create flight ticket throught the previous file.
+
+So this will solve the first part of our problem, being able to create any kind of object type we want. (The second part is the controller part)
+
+
+CONTROLLER:
+So for example we could write down a go script (you can write it in any language but with go is easier). 
+
+controller.go
+
+ package flightticket
+ var controllerKind = apps.SchemeGroupVersion.WithKind("Flightticket")
+ func (dc *FlightTicketController) Run(workers int, stopCh <-chan struct{})
+ func (dc *FlightTicketController) callBookFlightAPI(obj interface{})
+
+At this point we can build the code and run it
+
+ . go build -o sample-controller
+ . ./sample-controller -kubeconfig=$HOME/.kube/config
+
+And this will start the process. Since you don't want to start the process over and over again every time, is better to wrap you controller in a docker image and run it inside a pod.
+
+
+However the CRD and the Custom Controller can be packaged toghther using an Operator Framework.
+
+
+ ----------------------------------------------------------------
+ |	CRD				Custom Controller	|
+ |								|
+ |  ----------------------	  --------------------------    |
+ |  |  Resource          |	  | Resource Controler     |    |
+ |  ----------------------	  --------------------------    |
+ |								|
+ |  ----------------------	  --------------------------    |
+ |  |  Resource Backup   |	  | Backup Operator        |    |
+ |  ----------------------	  --------------------------    |
+ |								|
+ |  ----------------------	  --------------------------    |
+ |  |  Resource Restore  |	  | Restore Operator       |    |
+ |  ----------------------	  --------------------------    |
+ |								|
+ ----------------------------------------------------------------
+
+The operator is responsible from taking backups and restoring backups in case of disaster. A lot of operator are available at the OperatorHub.io.
+This is the easiest way to install applications like graphana for example. 
+
+
+
+
+
+
+
+
+

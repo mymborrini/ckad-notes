@@ -1,0 +1,55 @@
+K8S ARCHITECTURE
+
+Node => A node is a machine phisical or virtual on which k8s is installed. Is a worker machine where container runs on k8s. But what if the node fails? I need more than one node.
+Cluster => Is a set of nodes groups together, this way even if one node fails you have your application accessible from another node.
+
+Now we have a cluster, but who is responsible for managing the cluster? For example, if a node fails, who is responsible for moving the work from that node to another node. 
+A master => Is a separate Node which comes with k8s and it's responsible to watch over the node in the cluster, and is responsible for the actual orchestration of containers in a worker node.
+
+When you install k8s in a system you actually install the following components:
+
+ . API Server
+ . etcd
+ . kubelet
+ . Container Runtime
+ . Controller
+ . Scheduler
+
+
+API Server  => acts as the frontend for k8s the clients all talk to the API Server to interact with the k8s cluster
+
+etcd keystore => Distributed reliable key-value store used by k8s to store all data used to manage the cluster. When you have multiple nodes or multiple cluster etcd stores all the information in a distributed
+maner. Etcd is responsible to implements locks within the cluster to ensure that there are no conflicts between the master and the other nodes
+
+Scheduler => Is responsible for distributing works on containers across multiple nodes, it looks for newly created container and assign them to nodes.
+
+Controller => Is the brain behind the orchestration they are responsible for noticing and responding when nodes, containers, endpoints goes down. The controller makes decision to bring up 
+new containers in cases
+
+Container Runtime => Is the underline software that is used to run containers, in our case it happens to be docker... but that are other options as well
+
+Kubelet => Is the agent that runs on each node in the cluster, the agent is responsible to making sure the container are running on the node as expected.
+
+
+So far we have seen two types of server:
+ . Master Node
+ . Worker Node
+
+How does one server becomes a master and the other the workers, how does this resource distributes across master and workers?
+In a worker node we need:
+ . Container Runtime (Docker)
+ . Kubelet (this is responsible for interacting with the master, it is responsible to communicate with the kube-apiServer, and this is what it makes a worker)
+
+
+
+The master server has the:
+ . Kube API Server (this is what it makes a master)
+ . etcd (All the information are stored in the etcd)
+ . controller
+ . scheduler
+
+
+Kubectl is the "kube command line tool" or kube control, there are several commands like:
+
+ . kubectl cluster-info
+ . kubectl get nodes

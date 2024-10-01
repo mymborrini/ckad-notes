@@ -1,0 +1,69 @@
+Docker and ContainerD
+
+What the difference is between those two? 
+There are also a few cli tools like CTR, NERDCTL, CRICTL
+
+So you're wondering what are this cli tools and which one should you use it. 
+
+ 1  In the beginning docker was the dominent container runtime and K8s was built to orchestrate docker specifically. 
+ 2  Then k8s grow popularity as a container orchestrator and k8s want to work with container runtime which is different from docker like rocket ecc..
+ 3  K8s therefore introduce an interface called Container Runtime Interface (CRI). This interface allow any vendor to work with k8s as long as they are compliant with the 
+Open Contaienr Initiative (OCI) standards (imagespec, runtimespec). Imagespec defines the specification on how an image should be build and a runtimespec defines how any container
+runtime should be develop. Keeping this interface in mind anyone can build a container runtime that works with k8s.
+ 4  Docker wasn't build to support he CRI standard so k8s introduce the DOCKERSHIM which is a workaround to support docker.  
+ 5  Docker is not just a container runtime, but it consists of multiple toools which works together: API, BUILD, VOLUMES, AUTH, SECURITY and of course the container runtime called 
+RUNC, the daemon which manage RUNC was called as CONTAINERD. So CONTAINERS is CRI compatible and therefore can works directly on k8s. So CONTAINERD can be used as a container runtime
+on its own separate from Docker engine.  
+ 6  From the creation of ContainerD the support for Docker engine is no longer necessary and therefore the Dockershim was removed from k8s version v1.24. So all the image build 
+with docker will work on k8s thanks to containerD, but the support for docker directly was removed by k8s.
+
+
+Let's look into containerD more specifically.
+It can manage the complete container lifecycle of its host system: image transfer and storage, container execution and supervision, low-level storage and network attachments.
+So typically when we run a docker image we run the command:
+
+ . docker run <image-name> ....
+
+In this case we are using docker engine to run this command. And this is not CRI compliant. 
+But we can install containerd alone and run that image without docker. Once you install containerD it comes
+with a command line tool calls CTR; which is only made from debugging containerD so is not really user friendly, and only support a limited number of features. 
+
+A better alternative is the NERDCTL.
+
+ . It provides a Docker-like CLI for containerD
+ . supports docker-compose like file
+ . supports newest features in containerd
+    . encrypted container images
+    . Lazy pulling
+    . P2P image distribution
+    . Image signing and verifying 
+    . Namespaces in k8s
+
+NERDCTL cli tool works in exact same way as docker.
+So you can ideally substitute in cammond the DOCKER keyword with NERDCTL keyword.
+
+ . docker run --name redis redis:alpine ==> nerdctl run --name redis redis:alpine
+
+or 
+
+ . docker run --name webserver -p 80:80 -d nginx ===> nerdctl run --name webserver -p 80:80 -d nginx
+
+
+There is another command toll line which is important to analyze: CLI - CRICTL
+ . CRICTL provides a CLI for CRI compatible container runtimes
+ . Installed separately 
+ . Used to inspect and debug container runtimes
+   . not create containers ideally 
+ . Works across different runtimes
+ . Is more integrated with k8s
+
+For example:
+
+ . crictl pull <image>
+ . crictl ps -a
+ . crictl exec -i -t <container-id> <command>
+
+So more or less like docker in this case, one benefits is that CRICTL is aware of k8s pods. The benefit as specified before is that it can connect to any CRI container runtime  
+not just containerD.
+
+

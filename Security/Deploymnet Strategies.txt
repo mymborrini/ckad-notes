@@ -1,0 +1,193 @@
+DEPLOYMENT STRATEGY: BLUE/GREEN
+
+Earlier we discuss about two kind of strategies:
+ 
+the Recreate and the Rolling Update.
+
+
+There are a couple of other strategy, that can be implemented in a different way
+
+
+ 1. The app is uploaded in a parallel replicaSet and all the traffic is still redirect to app:1.0 (Blue) 
+ 2. when all the tests are passed all the traffic is redirect to app:2.0 (Green)
+ 3. We rid of the Blue Deployment
+
+1
+
+    ----------------------------
+    |           Blue           |     <==== Traffic
+    ----------------------------
+ 
+ ----------   ----------   ----------
+ | app1.0 |   | app1.0 |   | app1.0 |
+ ----------   ----------   ----------
+
+
+    ----------------------------
+    |           Green          |
+    ----------------------------
+ 
+ ----------   ----------   ----------
+ | app2.0 |   | app2.0 |   | app2.0 |
+ ----------   ----------   ----------
+
+
+2
+
+    ----------------------------
+    |           Blue           |     
+    ----------------------------
+ 
+ ----------   ----------   ----------
+ | app1.0 |   | app1.0 |   | app1.0 |
+ ----------   ----------   ----------
+
+
+    ----------------------------
+    |           Green          |	<==== Traffic
+    ----------------------------
+ 
+ ----------   ----------   ----------
+ | app2.0 |   | app2.0 |   | app2.0 |
+ ----------   ----------   ----------
+
+
+3
+
+    ----------------------------
+    |           Green          |   <==== Traffic
+    ----------------------------
+ 
+ ----------   ----------   ----------
+ | app2.0 |   | app2.0 |   | app2.0 |
+ ----------   ----------   ----------
+
+
+
+The best way to implements this kind of strategy is with Istio; but right now we want to use k8s native functions.
+
+First we have the original version of our applications. The blue Deployment and we create a service to route traffic to it. In order to connect the traffic from the service
+to deployment's pods we are using a label named version:v1
+
+   |  Service  | (version:v1)
+
+  ------------------
+ | Deployment - blue| (version:v1)
+  ------------------
+ 
+Now we deploy a new version of the application the Deployment Green and we set new label version called v2
+
+    			|  Service  | (version:v1)
+
+  ------------------				 -------------------				
+ | Deployment - blue| (version:v1)		| Deployment - green| (version:v2)
+  ------------------				 -------------------
+
+
+When all the tests are passed what we have to do is simply to move the service version from v1 to v2
+
+
+    			|  Service  | (version:v2)
+
+  ------------------				 -------------------				
+ | Deployment - blue| (version:v1)		| Deployment - green| (version:v2)
+  ------------------				 -------------------
+
+
+
+CANARY
+
+1 In this strategy we deploy a new version and we will redirect only a small percentage of the traffic to this new app version. 
+2 If all the tests passed then all the application is updated
+3 we rid off the canary deployment
+
+1
+
+    ----------------------------
+    |           Deployment           |     <==== Traffic (90%)
+    ----------------------------
+ 
+ ----------   ----------   ----------
+ | app1.0 |   | app1.0 |   | app1.0 |
+ ----------   ----------   ----------
+
+
+    ----------------------------
+    |           Canary          |  <----- Traffic (10%)
+    ----------------------------
+ 
+ 	 ----------   
+	 | app2.0 |   
+	 ----------   
+
+
+2
+
+    ----------------------------
+    |           Deployment           |     <==== Traffic (100%)
+    ----------------------------
+ 
+ ----------   ----------   ----------
+ | app2.0 |   | app2.0 |   | app2.0 |
+ ----------   ----------   ----------
+
+
+    ----------------------------
+    |           Canary          |  
+    ----------------------------
+ 
+ 	 ----------   
+	 | app2.0 |   
+	 ----------   
+3
+
+    ----------------------------
+    |           Deployment           |     <==== Traffic (100%)
+    ----------------------------
+ 
+ ----------   ----------   ----------
+ | app2.0 |   | app2.0 |   | app2.0 |
+ ----------   ----------   ----------
+
+
+
+
+So first we have our primary deployment with 5 pods for example, as we did before in order to connect the service to the deployment we are using a label named version:v1
+
+   |  Service  | (version:v1)
+
+  ------------------
+ | Deployment - primary| (version:v1)
+  --------------------
+
+
+Now we deploy a new version of the application the Deployment Canary (5 pods) and we set new label version called v2.
+
+    			|  Service  | (version:v1)
+
+  ------------------				 -------------------				
+ | Deployment - primary| (version:v1)		| Deployment - canary(version:v2)
+  ------------------				 -------------------
+
+We want to connect the service to both our deployment, in order to do that we add a label called app:front-end and then we update the label in the service to match this common label
+
+    			|  Service  |   (app: frontend)
+
+  ------------------				 -------------------				
+ | Deployment - primary| (version:v1)		| Deployment - canary(version:v2)
+  (app: frontend)				    (app: frontend)
+  ------------------				 -------------------
+
+So now both traffic are route to both the application but are routes in 50% each one. We want that only a small percentage goes to the new application. In order to achieve this is 
+enough to reduce the number of pods from 5 to 1 for example.
+
+So we have 84,% goes to the primary and just 16,% goes to the canary.
+
+One of the drawback of doing in this way is that we have a limited control over the split of traffic between the deployments, if we want for example to split the traffic 1% - 99% we should have
+100 pods. This is when service mesh like istio comes into place.
+
+
+To scale down or up a deployment just type: 
+ . kubectl scale deployment --replicas=<replicas-we-wanted> <deployment-name>
+
+<replicas-we-wanted> could also be 0

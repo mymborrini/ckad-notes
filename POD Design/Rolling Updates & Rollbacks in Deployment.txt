@@ -1,0 +1,364 @@
+ROLLING UPDATE AND DEPLOYMENT
+
+First we have to understand Rollout and Versioning in the deployment.
+
+When you first create a deployment it triggers a ROLLOUT (Rollout in english is the stage of an aircraft landing during which it travels along the runway while losing speed) 
+In k8s the rollout is when an application is updated and it does not update every one at the same time but one after the other, in order to not have a gap in time.
+A new ROLLOUT triggers a new REVISION. Let's call it revision 1.
+
+When the application is updated (aka when the container image is upgraded) a new ROLLOUT is triggered and a new revision (Revision 2) takes place.
+
+This enables us to rollback in case of problem.
+
+We can check the status of the rollout by typing:
+	
+	. kubectl rollout status deployment/<deploymentName>
+
+We can check the revisions and history:
+
+	. kubectl rollout history deployment/<deploymentName>
+
+
+
+There are two types of DEPLOYMENT STRATEGY
+
+1 (RECREATE) Destroy all of the prev images and then recreate new ones.
+
+(The problem in that is when the application is destroyed there is a gap in time where the application is down).
+This is not the deafult behaviour
+
+
+2 (ROLLING UPDATE) Destroy one by one, and update one by one with the newer version. This way the application never goes down.
+This is the default.
+
+So how exactly do you update your deployment? If you have a file just change the image TAG, and then type: => . kubectl apply -f deployment.yml
+
+PREVIOUSLY:
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+	name: myapp-deployment
+	labels:
+		app: myapp
+		type: front-end
+
+spec:
+	template:
+		metadata:
+			name: myapp-pod
+			labels:
+				app: myapp
+				type: front-end
+		spec:
+			containers:
+				- name: ningx-container
+				  image: nginx:1.7.0
+	replicas: 3
+	selector: 
+		matchLabels:
+			type: front-end
+
+
+
+AFTER:
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+	name: myapp-deployment
+	labels:
+		app: myapp
+		type: front-end
+
+spec:
+	template:
+		metadata:
+			name: myapp-pod
+			labels:
+				app: myapp
+				type: front-end
+		spec:
+			containers:
+				- name: ningx-container
+				  image: nginx:1.7.1
+	replicas: 3
+	selector: 
+		matchLabels:
+			type: front-end
+
+
+If you don't have a file just type: . kubectl set image deployment/<deploymentName> <newImage>.
+
+
+
+================================
+HOW ROLL OUT WORKS
+
+
+First Nginx 1.0 (Before Upgrade)
+	----------------------------------------------------------------------------
+	|	Deployment	      	     					   |
+	|									   |
+	| ------------------------------------				    	   |
+	| |	Replica Set 1		     | 					   |
+	| |				     |					   |
+	| |  -----------------		     |					   |
+	| |  |	Pod: Nginx 1.0| (Ready)	     | 					   |
+	| |  -----------------		     |					   |
+	| |				     |	 				   |
+	| |  -----------------		     |					   |
+	| |  |	Pod: Nginx 1.0| (Ready)	     |					   |	
+	| |  -----------------		     |					   |
+	| |				     |					   |
+	| |  -----------------		     |					   |
+	| |  |	Pod: Nginx 1.0|	(Ready)	     |					   |
+	| |  -----------------		     |					   | 
+	|  ------------------------------------				    	   |
+	|									   |
+	----------------------------------------------------------------------------
+	 
+
+A new version is upgraded: 1.1
+K8s create a new Replica set insde the deployment
+	---------------------------------------------------------------------------------
+	|	Deployment	      	     					   	|
+	|									   	|
+	| ------------------------------------	------------------------------------	|
+	| |	Replica Set 1		     | 	|	Replica Set 2		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0| (Terminating)| 	|  | Pod: Nginx 1.1| (Starting)      |  |
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0| (Ready)	     |	|  | Pod: Nginx 1.1| (Not Ready)     | 	|	
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0|	(Ready)	     |	|  | Pod: Nginx 1.1| (Not Ready)     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	| 
+	|  -----------------------------------  ------------------------------------   	|
+	|									   	|
+	---------------------------------------------------------------------------------
+
+
+When the first pod in Replica-set 2 is ready; k8s can terminate the pod in replica set 1
+
+	---------------------------------------------------------------------------------
+	|	Deployment	      	     					   	|
+	|									   	|
+	| ------------------------------------	------------------------------------	|
+	| |	Replica Set 1		     | 	|	Replica Set 2		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0| (Terminated) | 	|  | Pod: Nginx 1.1| (Ready) 	     |  |
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0| (Ready)	     |	|  | Pod: Nginx 1.1| (Not Ready)     | 	|	
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0|	(Ready)	     |	|  | Pod: Nginx 1.1| (Not Ready)     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	| 
+	|  -----------------------------------  ------------------------------------   	|
+	|									   	|
+	---------------------------------------------------------------------------------
+
+Then it moved to the second one:
+
+	---------------------------------------------------------------------------------
+	|	Deployment	      	     					   	|
+	|									   	|
+	| ------------------------------------	------------------------------------	|
+	| |	Replica Set 1		     | 	|	Replica Set 2		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0| (Terminated) | 	|  | Pod: Nginx 1.1| (Ready) 	     |  |
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0| (Terminating)|	|  | Pod: Nginx 1.1| (Starting)      | 	|	
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0|	(Ready)	     |	|  | Pod: Nginx 1.1| (Not Ready)     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	| 
+	|  -----------------------------------  ------------------------------------   	|
+	|									   	|
+	---------------------------------------------------------------------------------
+
+And so on for all the pods inside Replica 2.
+
+================================
+HOW ROLL BACK WORKS
+
+To roll back just type the following:
+
+	.  kubectl rollout undo deployment/<deploymentName>
+
+So all the new pods will be terminating and the previous one will be resumes, always followin the ROLLING UPDATE strategy.
+
+First Stage:
+	---------------------------------------------------------------------------------
+	|	Deployment	      	     					   	|
+	|									   	|
+	| ------------------------------------	------------------------------------	|
+	| |	Replica Set 1		     | 	|	Replica Set 2		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0| (Terminated) | 	|  | Pod: Nginx 1.1| (Ready) 	     |  |
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0| (Terminated) |	|  | Pod: Nginx 1.1| (Ready)         | 	|	
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0|	(Terminated) |	|  | Pod: Nginx 1.1| (Ready)         | 	|
+	| |  -----------------		     |	|  -----------------		     | 	| 
+	|  -----------------------------------  ------------------------------------   	|
+	|									   	|
+	---------------------------------------------------------------------------------
+
+Second stage
+	---------------------------------------------------------------------------------
+	|	Deployment	      	     					   	|
+	|									   	|
+	| ------------------------------------	------------------------------------	|
+	| |	Replica Set 1		     | 	|	Replica Set 2		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0| (Ready)	     | 	|  | Pod: Nginx 1.1| (Terminating)   |  |
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0| (Terminated) |	|  | Pod: Nginx 1.1| (Ready)         | 	|	
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0|	(Terminated) |	|  | Pod: Nginx 1.1| (Ready)         | 	|
+	| |  -----------------		     |	|  -----------------		     | 	| 
+	|  -----------------------------------  ------------------------------------   	|
+	|									   	|
+	---------------------------------------------------------------------------------
+
+Third stage
+	---------------------------------------------------------------------------------
+	|	Deployment	      	     					   	|
+	|									   	|
+	| ------------------------------------	------------------------------------	|
+	| |	Replica Set 1		     | 	|	Replica Set 2		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0| (Ready)	     | 	|  | Pod: Nginx 1.1| (Terminated)    |  |
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0| (Ready)      |	|  | Pod: Nginx 1.1| (Terminating)   | 	|	
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0|	(Terminated) |	|  | Pod: Nginx 1.1| (Ready)         | 	|
+	| |  -----------------		     |	|  -----------------		     | 	| 
+	|  -----------------------------------  ------------------------------------   	|
+	|									   	|
+	---------------------------------------------------------------------------------
+
+Until all the pods are rollbacked.
+
+Now to summarize all the commands:
+
+CREATE => . k create -f deployment.yml
+GET => . k get deployments
+UPDATE => . k apply -f deployment.yml
+STATUS => . k rollout status deployment/<deploymentName>
+HISTORY => . k rollout history deployment/<deploymentName>
+ROLLBACK => . k rollout undo deploymentName.
+
+
+Let's check in more detail the command k rollout history deployment/<deploymentName>
+
+If you type after the simple creation you will see the following output
+
+REVISION	CHANGE-CAUSE
+1		<none>
+
+As you can see change-cause says none, that's because I didi not ask k8s to record the change that I make.
+If this is the first revision that does matter.
+
+In order to record the change...
+k create -f deployment.yaml --record
+
+If you type the history again
+REVISION	CHANGE-CAUSE
+1		k create -f deployment.yaml --record=true
+
+
+Let's update the image tag and we want the new deployment wiht the new image to take place.
+Change the deployment-file accordingly and then type.
+
+k apply -f deployment.yaml
+
+Now if you run the history again
+REVISION	CHANGE-CAUSE
+1		k create -f deployment.yaml --record=true
+2		k apply -f deployment.yaml --record=true
+
+
+If I want to upgrade the deployment another way is the set image command
+
+ . k set image deployment/<deploymentName> <containerName>=<imageName>:<imageTag>
+
+In this case the history will show something like:
+REVISION	CHANGE-CAUSE
+1		k create -f deployment.yaml --record=true
+2		k apply -f deployment.yaml --record=true
+3		k set image deployment/<deploymentName> <containerName>=<imageName>:<imageTag>
+
+
+Let's pretend that there is an issue with the last revision, so let's make a roll-back:
+
+ . k rollout undo deployment/<deploymentName>
+
+The history will be something like the following:
+REVISION	CHANGE-CAUSE
+1		k create -f deployment.yaml --record=true
+3		k set image deployment/<deploymentName> <containerName>=<imageName>:<imageTag>
+4		k apply -f deployment.yaml --record=true
+
+We rollback to revision n2.  So revision 2 disappear and revision 4 appears with the same command of revision 2
+
+
+So what happened if we make an error, for example by typing an Image that does not exist. After k apply -d deployment-definition.yml --record
+we type: . k rollout status deployment/<deploymentName> 
+
+And we see that the rollout is stucked 
+If you type k get pods, you will see that some is in state of running and others in ImagePullBackOff. K8s see that since it cannot deploy the new image, then it should not proceed in the rollout. Otherwise
+it will breaks all for new users. So it proactively stop the rollout.
+
+
+For the rollup you can define a rollup strategy where you can define how many pods goes down or up at a time for example if you have 3 pods like before and you choose
+66% max unavailabe this could be a situation like the following:
+
+	---------------------------------------------------------------------------------
+	|	Deployment	      	     					   	|
+	|									   	|
+	| ------------------------------------	------------------------------------	|
+	| |	Replica Set 1		     | 	|	Replica Set 2		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0| (Terminating)| 	|  | Pod: Nginx 1.1| (Starting)	     |  |
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0| (Terminating)|	|  | Pod: Nginx 1.1| (Starting)      | 	|	
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |				     |	|				     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	|
+	| |  |	Pod: Nginx 1.0|	(Ready)	     |	|  | Pod: Nginx 1.1| (Not Ready)     | 	|
+	| |  -----------------		     |	|  -----------------		     | 	| 
+	|  -----------------------------------  ------------------------------------   	|
+	|									   	|
+	---------------------------------------------------------------------------------
+
+As you can see 2 out of 3 are in the ready state.

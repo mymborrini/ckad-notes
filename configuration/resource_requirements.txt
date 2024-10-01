@@ -1,0 +1,101 @@
+RESOURCE REQUIREMENTS
+
+Consider 3 nodes k8s cluster each node have a set of CPU, Mem,  Disk available.
+Every POD consume some disk resources let's consider that every pod consumes:
+
+2 CPU, 1 Mem, some Disk space
+
+
+The scheduler decides which pods goes to which nodes. The scheduler takes into consideration the number of resources required by a pod and those available on the nodes. If a node hasn't enough resources
+the scheduler moves the pod to another node. 
+
+If no node has enough resources to hosted the pod, the pod will remain in a pending state.
+
+By default k8s assumes that a pod requires 0.5 CPU and 256 MeBiByte of memory. 
+This is know has the minimum resource for a POD. 
+
+If you think your application needs more or less than this, you can specify them in you pod definition
+
+apiVersion: v1
+kind: Pod
+metadata:
+	name: simple-webapp-color
+	labels:
+		name: simple-webapp-color
+spec:
+	containers:
+		- name: simple-webapp-color
+		  image: simple-webapp-color
+		  ports: 
+			- containerPort: 8080
+		  resources:
+			requests:
+				memory: "1Gi"
+				cpu: 1	
+
+
+Now let's see the mapping of the CPU with the main cloud providers
+
+1 CPU == 1 AWS vCPU
+1 CPU == 1 GCP Core
+1 CPU == 1 Azure Core
+1 CPU == 1 Hyperthread
+
+		  resources:
+			requests:
+				memory: "1Gi"
+				cpu: 1	
+
+These are the resources that are allocated to your container and no other can use this resources.
+
+Let's look at the container running on a node, in the docker world a docker container has no limits of the (free) resources it can cosumes on a node.
+
+So if you have for example a node with 10 cpu, and 2 pods, the first one with allocated 3 CPU and the second one with allocated 1 CPU.
+
+If the first one needs more resources It can grows up to 9 CPU (10 (the max value of CPUs) - 1 (the CPU allocated to the 2 pod)).
+
+This behaviour of course can suffocating the native process of the node or other container. To put a limit of this you need to add a limit session in the pod definition file.
+
+   
+
+apiVersion: v1
+kind: Pod
+metadata:
+	name: simple-webapp-color
+	labels:
+		name: simple-webapp-color
+spec:
+	containers:
+		- name: simple-webapp-color
+		  image: simple-webapp-color
+		  ports: 
+			- containerPort: 8080
+		  resources:
+			requests:
+				memory: "1Gi"
+				cpu: 1	
+			limits:
+				memory: "2Gi"
+				cpu: 2
+
+So what happened if the container tries to go over the limits. It depends on the resource:
+In case of CPU, k8s throttle the cpu so it does not go beyond the specify limit.
+In case of Memory, if the pod consume more memory than the limits constantly the pod will terminate.
+
+
+In realtà è possibile settare i valori di default per un namespace:
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+	name: mem-limit-range
+spec:
+	limits:
+		- default:
+			memory: 512Mi (This is the memory limit)
+		  defaultRequest:
+			memory: 256Mi (This is the memory that a container needs to have, the first one. It's the memory requested by the container to start)
+		  type: Container
+
+
+

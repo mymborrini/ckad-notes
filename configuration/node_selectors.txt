@@ -1,0 +1,67 @@
+Node Selectors:
+
+Let's begin with an example:
+
+---------- 
+|	 |
+|	 |
+|	 |
+|	 | ---------- ----------- 
+|	 | |	    | |		|
+|	 | |	    | |		|
+|	 | |	    | |		|
+|	 | |	    | |		|
+|	 | |	    | |		|
+| Node1  | | Node 2 | |	Node 3  |
+---------- ---------- -----------
+
+Node 1 has a higher resources.
+Let's image we have different kind worklaods running in my cluster:
+
+A B C D
+
+A is a data processing workloads which requires higher resources and I would like to dedicate node1 to A, since is the only node that will not run out of resources
+when the job demands extra resources.
+
+In order to do this we need to add a NODE SELECTORS (a limitation on the pod):
+
+
+apiVersion: v1
+kind: Pod
+metadata:
+	name: myapp-pod
+spec:
+	containers:
+		- name: data-processor
+		  image: data-processor
+	nodeSelector:
+		size: Large
+
+But where this size Large come from?
+Size Large are labels assign to the node, so before creating this pod I have to labels my node
+
+To do so just type:
+	. kubectl label nodes <node-name> <label-key>=<label-value>
+So in this case:
+	. kubectl label nodes node1 size=Large
+
+
+Node selectors has limitation. What if the requirements are something more complex like
+Place the pod on Large OR Medium Node?
+Place the pod on any node which is not small.
+
+
+---------- 
+|	 |			  ----------- 
+|	 |			  |	    |
+|	 |			  |	    |
+|	 | ---------- ----------- 
+|	 | |	    | |		| |	    |
+|	 | |	    | |		| |	    |
+|	 | |	    | |		| |	    |
+|	 | |	    | |		| |	    |
+|	 | |	    | |		| |	    |
+| Node1  | | Node 2 | |	Node 3  | |Node 4   |
+---------- ---------- ----------- ----------- 
+
+Let's find out in Node Affinity..

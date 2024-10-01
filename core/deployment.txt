@@ -1,0 +1,75 @@
+Kubernetes Deployment
+
+How you want to deploy your application? For example you have a web server which needs to be deployed in a production environment, you may have a single node 
+but 
+- you want servral instance of the web server running 
+- When a new version on the application appears in the docker registry you want to upgrade all the instances 
+- but NOT at the same time, because this will affect the user experience, instead I wanto to make the upgrade one after the other and this kind of updates 
+is known as rolling updates
+- If you make an error and you want to rollback the changes
+- If you want ot make multiple changes such as scaling, modifying the allocation; You would like the pause your environemnt, make your changes and then resume your
+environment
+Deployment is a kubernetes object that comes higher than rs in the hierarchy. 
+
+The Deployment is similar to rs except for the kind which is not REplicaSet but Deployment instead.
+
+Once you create the deployment:
+The deployment automatically create replicas set which automatically creates pods.
+To see all the obejcts it's enough to run
+ 
+ - kubectl get all
+
+So in general the architecture is something like this:
+
+
+ -------------------------------------------------------------------------------------------------------------------------
+ |	SeveralInstance 	UpdateAllInstance 	RollingUpdates 		Rollback 	Pause 		Resume   |
+ |															 |
+ |	--------------------------------------------------------------------------------------------------------------   |
+ |	|													     |	 |
+ |	|	--------	--------	--------	--------	--------	--------	     |	 |
+ |	|	| POD	|	| POD	|	| POD	|	| POD	|	| POD	|	| POD	|	     |	 |
+ |	|	--------	--------	--------	--------	--------	--------	     |	 |
+ |	|													     |	 |
+ |	|						REPLICA SET						     |	 |
+ |	--------------------------------------------------------------------------------------------------------------	 |
+ |						DEPLOYMENT								 |
+ --------------------------------------------------------------------------------------------------------------------------
+
+So the deployment is something which wrap the replicaset and add several commands to interact with
+
+If you need to edit a pod inside a deployment you can do easier than editing a pod directly. Since the pod template is a child of the deployment specification, with 
+every change the deployment will automatically delete and create a new pod with the new changes.
+
+kubectl edit deployment <deploymentName>.
+
+An example of a deployment is the following:
+
+appVersion: apps/v1
+
+kind: Deployment
+
+ 
+metadata:
+  name: myapp-deployment
+  labels:
+    app: myapp
+    type: frontend
+
+
+spec:
+  template:
+    metadata:
+      name: myapp-pod
+      labels:
+        app: myapp
+        type: frontend
+    spec:
+      containers:
+        - name: nginx-controller
+          image: nginx
+  replicas: 3
+  selector:
+    matchLabels:
+      type: frontend
+

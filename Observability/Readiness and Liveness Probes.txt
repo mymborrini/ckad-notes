@@ -1,0 +1,131 @@
+READINESS PROBES
+================
+
+
+Pod Lifecycle:
+-------------
+	
+A pod has some status and some conditions
+
+POD STATUS:
+ . PENDING: First created, the scheduler tries to figure out where to place the pod. If the scheduler does not figure out where to place the pod, it will remains in a pending state.
+To figure out why is a pending state k describe
+ . CONTAINER CREATING: The image/s is going to be pulled and the container/s starts
+ . RUNNING: the pod is running and it will remains in that state until is terminated 
+
+
+POD CONDITION:
+It is an array of true/false value which tell us more information about the pod.
+
+ . PODSCHEDULED: The pod is placed in a node
+ . INTIALIZED: The pod is initialised
+ . CONTAINERSREADY: All the pod in a container are ready
+ . READY: the pods itself is considered to be ready
+
+The Ready state in particular is really important because tell the service that the pod is ready and they can redirect the traffic to it.
+
+That could not be necessary true, image an application which runs liquibase script for db migration before it's ready, in that case the pod will be ready way before the application is ready.
+In order to tell k8s how to check if the application is ready, there are different methods:
+
+HTTP Test - /api/ready 
+TCP Test - 3306 (used in database generally)
+Exec Command:...
+
+How do you define that? Trhough Readiness Probe
+
+apiVersion: v1
+kind: Pod
+metadata:
+	name: simple-webapp
+	labels:
+		name: simple-webapp
+spec:
+	containers:
+		- name: simple-webapp
+		  image: simple-webapp
+		  ports:
+			- containerPort: 8080
+		  readinessProbe:
+			httpGet:
+				path: /api/ready
+				port: 8080
+			initialiDelaySeconds: 10
+			periodSeconds: 5
+			failureThreshold: 8 // The number of failure before destroy everything
+
+
+In this case before move in READY state it will check and wait for this Probe
+We can test for tcp:
+
+		  readinessProbe:
+			tcpSocket:
+				port: 3306
+Or for bash command:
+		
+		readinessProbe:
+			exec:
+				command:
+					- cat
+					- /app/is_ready
+
+The readiness probe is really useful, when you want to add a new replica. If readinessProbe is not configured correctly, the service will immeditly forward part of the traffic to that particular pod.
+This could results in a 503 response for at least some of the client. Instead if readinsessProbe is configured correcty the service will wait until the application is ready.
+
+
+LIVENESS PROBES
+===============
+
+In k8s if the application crashed k8s make an attempt to restart the application, the numeber of this attempts is the one below RESTARTS in kget pods.
+
+But what if the application is not working but the container keeps to stay alive, for example because of a bug in the code the application is stuck into an infinite loop. For what k8s concern the container
+is up so the application is considered to be up, even if the users are not served.
+The container should restarted at least, or deleted and recreated
+
+Liveness Probes comes in our help, with checking if the application is still alive periodically. If the test failes the container is killed and a new one will be recreated.
+
+Like the readiness probes there are different strategies
+
+HTTP Test - /api/ready 
+TCP Test - 3306  (used in database generally)
+Exec Command:...
+
+
+
+apiVersion: v1
+kind: Pod
+metadata:
+	name: simple-webapp
+	labels:
+		name: simple-webapp
+spec:
+	containers:
+		- name: simple-webapp
+		  image: simple-webapp
+		  ports:
+			- containerPort: 8080
+		  livenessProbe:
+			httpGet:
+				path: /api/ready
+				port: 8080
+			initialDelaySeconds: 10
+			periodSeconds: 5
+			failureThreshold: 8 // The number of failure before destroy everything
+
+
+In this case before move in READY state it will check and wait for this Probe
+We can test for tcp:
+
+		  readinessProbe:
+			tcpSocket:
+				port: 3306
+Or for bash command:
+		
+		readinessProbe:
+			exec:
+				command:
+					- cat
+					- /app/is_ready
+
+
+
+So like readinsessprobes

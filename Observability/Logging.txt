@@ -1,0 +1,21 @@
+LOGGING:
+
+Logging in docker:
+Just type: (the -f variable means that the log keep being updated otherwise it will be static)
+
+docker -logs -f <containerId>
+
+In K8s:
+
+k logs -f <podName>
+
+So more or less is the same, but what happened if there are multiple docker containers inside a single pod?
+You must specify the container -name
+
+k logs -f <podName> <containerName>
+
+
+
+
+
+

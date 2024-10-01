@@ -1,0 +1,344 @@
+Requirements:
+
+Application Design and Build:
+
+ . Define, build and modify container images
+ . Choose and use the right workload resource (Deployment, DaemonSet, Cronjob)
+ . Undestand multi-container Pod design patterns (e.g. sidecar, init, others)
+ . Utilize persistent and ephemeral volumes
+
+Application Deployment:
+
+ . Use k8s primitives to implement common deployment strategies ( blue/green or canary)
+ . Understand Deployments and how to perform rolling updates
+ . Use the Helm package manager to deploy existing packages
+ . Kustomize ??
+
+Application Obeservability and Maintenance:
+ 
+ . Understand API deprecations
+ . Implement probes and health checks
+ . Use built-in CLI tools to monitor k8s applications
+ . Utilize container logs
+ . Debugging in k8s
+
+Application Environment, Configuration and Security
+
+ . Discover and use resources that extend k8s
+ . Understand authentication, authorization and admission control
+ . Understand requests, limits, quotas
+ . Understand ConfigMaps
+ . Define resourse requirements
+ . Create & consume Secrets
+ . Understand ServiceAccounts
+ . Understand Application Security (SecurityContexts, Capabilities, etc.)
+
+Service and Networking
+
+ . Demonstrate basic understanding of NetworkPolicies
+ . Provide and troubleshoot access to applications via services
+ . Use Ingress rules to expose applications
+
+Helm
+
+
+
+Set up
+
+export do='--dry-run=client -o=yaml'
+export ns='set-context --current --namespace'
+
+/.vimrc
+set tabstop=2
+set expandtab
+set shiftwidth=2
+
+
+
+N.B 
+
+1)
+Selector for services ecc...
+selector:
+  matchLabels:
+    component: redis
+  matchExpressions:
+    - { key: tier, operator: In, values: [cache] }
+    - { key: environment, operator: NotIn, values: [dev] }
+
+You can have a matchlabes or a matchselector
+
+2)
+When you create a Service, it creates a corresponding DNS entry. 
+This entry is of the form <service-name>.<namespace-name>.svc.cluster.local, which means that if a container only uses <service-name>, it will resolve to the service which is local to a namespace. 
+This is useful for using the same configuration across multiple namespaces such as Development, Staging and Production. If you want to reach across namespaces, you need to use the fully qualified domain name (FQDN).
+
+3)
+In Linux, any container in a Pod can enable privileged mode using the privileged (Linux) flag on the security context of the container spec. 
+This is useful for containers that want to use operating system administrative capabilities such as manipulating the network stack or accessing hardware devices
+
+4)
+grep -A 1 ( 1 line after)
+grep -B 1 ( 1 line before)
+grep -C 1 ( 1 line before and after)
+Example:
+k describe pod nginx | grep 'Events' -A 100
+
+5)
+kubectl run busybox --image=busybox --rm -it --restart=Never -- wget -O- 10.1.1.131:80
+wget -O- don't download the file will only print it on screen
+
+6) 
+kubectl logs nginx --previous
+Get log about previous instances after crushes
+
+
+7) If it ask you to run a script and then exit since it's a container it will exit automatically with restart=never
+
+8) to ovverride label add --override at the end of k label
+
+9) Remove a label app=frontend
+k label <typename> app-
+You have to add the '-' char at the end
+
+10) 
+. k get hpa <deployment-name> To see the autoscaler of a deployment
+. k autoscale deploy <name> --min=MIN_PODS --max=MAX_PODS --cpu-percent=TARGET_CPU_PERCENT To create an autoscale for a deploy
+
+11) Create a job with imperative command and save it to a file:
+kubectl create job busybox --image=busybox --dry-run=client -o yaml -- /bin/sh -c 'while true; do echo hello; sleep 10;done' > job.yaml
+
+12) See the log of a job
+k logs job/busy-28286467
+
+13) It is possible to create a job from a cronjob
+kubectl create job --from=cronjob/sample-cron-job sample-job
+
+14) base 64
+  echo admin | base64 => to encode admin in base64 (YWRtaW4K)
+  echo YWRtaW4K | base64 -d => to decode YWRtaW4K (admin) 
+
+15) To list all the lines until find a char (this is useful in case you need to pick up only the first column)
+If the colum are separated with the ":" char you should write
+   cat passwd | egrep -o '^[^:]+'
+ 
+16) In bash the while loop:
+while true; do date >> 'file location'; sleep 1; done
+
+DEFINE BUILD AND MODIFY CONTAINER IMAGES:
+
+1)
+The imagePullPolicy for a container and the tag of the image affect when the kubelet attempts to pull (download) the specified image:
+ . IfNotPresent
+ . Always
+ . Never
+
+2)
+Private registry you can use a docker-registry secret
+Creating a Secret with a Docker config
+You need to know the username, registry password and client email address for authenticating to the registry, as well as its hostname. Run the following command, substituting the appropriate uppercase values:
+
+kubectl create secret docker-registry <name> \
+  --docker-server=DOCKER_REGISTRY_SERVER \
+  --docker-username=DOCKER_USER \
+  --docker-password=DOCKER_PASSWORD \
+  --docker-email=DOCKER_EMAIL
+
+spec:
+  containers:
+    - name: foo
+      image: janedoe/awesomeapp:v1
+  imagePullSecrets:
+    - name: <name>
+
+3) You can convert a file from an old version to a new one through the command:
+(API Version to resume)
+
+UNDERSTANDING MULTI-CONTAINER POD DESIGN PATTERNS:
+
+
+
+APPLICATION ENVIRONMENT, CONFIGURATION AND SECURITY:
+1) You can create a config map both using an env file  --from-file-env=fileName (in that case you will have a data which resembles the env file) and using a txt
+file --from-file=<specialKey>=fileName (in that case you will a data with a single key <specialKey> and a list of key-value properties under that key
+
+2) If is asked to request or limit the CPU to a specifc millicore like 100 millicore it's enough to type:
+
+resources.requests.cpu=100m
+resoruces.limits.cpu=100m
+
+3) In resource quota cou can define resources requests and limits as well.
+ hard:
+    requests.cpu: "1"
+    requests.memory: 1Gi
+    limits.cpu: "2"
+    limits.memory: 2Gi
+4) In order to manually generate a token from a service account
+
+. k create token <serviceAccountName>
+
+5) Remember that label a deploy won't label pods automatically so if you want to expose a deployment with a particular selector consider that the pods inside the
+deploy needs to have that label
+
+6) You can set env variables through k set env instead of chaging files
+k set env --from=secret/ldh-secret deployment/ldhsecretapp
+
+7) In the securityContext runAsGroup means that you run that container/pod as you were inside the group
+fsGroup instead check that the user that runs the container belgons to the fsGroup you specified
+
+8) Secret create token from sa
+If a secret belongs to as Service Account it will have the annotation kubernetes.io/service-account.name SO if you find a secret there is no need to generearte a new token and encode it, you have to pick it up from the secret. 
+which is already encoded
+
+
+
+APPLICATION OBSERVABILITY AND MAINTENANCE
+
+In case metrics server is running
+k top nodes is available as commands to see a lot of information about nodes
+
+There is a task in this section which is a little bit too complicated so I leave it for after
+
+
+SERVICES AND NETWORKING:
+
+1) This is a good idea to test if a network policy works properly
+kubectl run busybox --image=busybox --rm -it --restart=Never -- wget -O- http://nginx:80 --timeout 2                          # This should not work. --timeout is optional here. But it helps to get answer more quickly (in seconds vs minutes)
+kubectl run busybox --image=busybox --rm -it --restart=Never --labels=access=granted -- wget -O- http://nginx:80 --timeout 2  # This should be fine
+
+
+2) When creating an ingress an error like this can occur
+error: failed to create ingress: Internal error occurred: failed calling webhook "validate.nginx.ingress.kubernetes.io": failed to call webhook: Post "https://ingress-nginx-controller-admission.ingress-nginx.svc:443/networking/v1/ingresses?timeout=10s": dial tcp 10.97.72.239:443: connect: connection refused
+
+ In this case
+k get validatingwebhookconfigurations -A
+
+And delete if any referred to ingress
+k delete validatingwebhookconfigurations <ingress-validation-name>
+	
+
+
+STATE:
+
+1)
+If you use an hostPath volume type and you mount it on two different pods, it could happened that the volume is not shared between those two. This could happened
+if the two pods are deployed on different nodes, because hostPath pick up the node folder.
+you need a volume type that is independent of a specific node. There are lots of different types per cloud provider, a general solution could be to use NFS.
+
+2) To copy a file/folder from a container to local just use k cp like tht example:
+. kubectl cp busybox:/etc/passwd ./passwd
+
+
+HELM:
+
+Terminology:
+RELEASE is the single release on k8s
+HELM DEPLOYMENT a synonym to release
+VERSION is the version of the release, when you do helm upgrade you upgrade the version of the release
+REVISION a synonym to VERSION
+CHART is either the folder where the chart is contained or the remote repo you are using
+
+Remember in helm you can filter by namespace in all the requests or setting -A for all namespaces
+
+1) Finding helm releases (pending, deployed, failed):
+helm list --pending
+helm list --deployed
+helm list --failed
+
+2) If you don't have any repo (don't think is the exam case) 
+https://charts.bitnami.com/bitnami => repo => <repo-name>
+<repo-name>/node is a chart you can use
+
+3) helm show 
+allows you to see information about charts without downloading it
+Really really useful, by doing this you can see the values you can change by using upgrade --set
+
+Helm upgrade set can inspect all the inner variables by point so if you need to set
+serviceAccount:
+  create: false
+
+You can type:
+ helm install bnode bitnami/node --set serviceAccount.create=true 
+
+4) If you want to download a chart without installing it.
+
+You can type: helm pull repo/chartname
+If you want to unzip it: helm pull --untar repo/chartname 
+
+
+CUSTOM RESOURCE DEFINITION:
+
+1) No particular suggestion I don't expect so many question upon this topic. Just remeber to search in the k8s documentation
+
+kind: CustomResource
+
+and copy/paste the yaml and do the modification requested.
+
+
+
+DEFINE BUILD AND MODIFY CONTAINER IMAGES
+
+1)
+In order to see the log build of an image or in general its history, you can type
+ . docker history <image-name>
+
+2) The command is a little bit different from k8s
+. docker exec -it <containerID> /bin/sh
+
+3) In order to run a local registry, don't know if I ever need to use it
+. docker run -p 5000:5000 --name local-registry registry:latest
+
+4) If you need to create a new image with a basic one, but with different tags or registry you can use 
+the tag command, so:
+. docker tag <source-image> <target-image>:<tagName>
+
+5) In the end if you need to tag an image and push to your local registry just type <ip>:<port>/<target-image>:<tagName> in the command before
+
+6) In order to manage secret ecc... you need docker swarm so I cannot answer some question only with docker.
+
+
+PODMAN
+1) In order to see the layers of an image:
+ . podman image tree <imagename>
+
+2) When you do "podman push" is slighty different from docker here is an example, remember to remove the tls 
+ . podman push --tls-verify=false e3416d10b547 localhost:5000/skynet/httpd:1.0
+
+3) In order to check what repositories is contained in the registry
+ . curl http://$registry_ip:5000/v2/_catalog
+
+
+
+API:
+
+The api is build in the follwing way <api-group>/<api-version>. Each one of them bring some resources.
+
+1) To check the reosurces just type (you can check some useful informations like the shortnames)
+k api-resources
+
+2) API like:
+1.22.2
+
+1 Is the Major version
+22 Is the Minor version
+2 Is the patch
+
+So => (Major version).(Minor version).(Patch)
+
+
+3) To get more information about a specific resource and its api just type
+k explain <resource-name>
+
+4) In order to get the preferred version of an api group or to get more information about api group in general
+  
+  . Create a proxy k proxy 8001& (this will create a proxy at port 8001 the '&' stands for go in background)
+  . curl loclahost:8001/apis/<api-group-name>
+
+5) To enable an api version you have to modify the api-server manifest and add at the end of command kube-apiserver
+
+--runtime-config=<api-group>/<api-version>
+For example
+ --runtime-config=rbac.authorization.k8s.io/v1alpha1
+
+
+

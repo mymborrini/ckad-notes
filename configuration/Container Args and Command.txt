@@ -1,0 +1,60 @@
+Kubernets command
+
+Regarding the Docker command file we have created a new image with sleep by default 5 seconds
+
+	FROM ubuntu
+	ENTRYPOINT ["sleep"]
+	CMD ["5"]
+
+Let's create a pod for this specified image
+
+apiVersion: v1
+kind: Pod
+metadata:
+	name: ubuntu-sleeper-pod
+spec:
+	containers:
+		- name: ubuntu-sleeper
+		  image: ubuntu-sleeper
+
+Now if you need to specify that the ubuntu should sleep from more seconds how you specify it in the pod definition? 
+With args you override the cmd
+With command you override the entrypoint
+
+	containers:
+		- name: ubuntu-sleeper
+		  image: ubuntu-sleeper
+		  args: ["10"]
+		  command: ["sleep2.0"]
+
+Now let's see how to set environment variables, in Docker is something like this:
+ . docker run -e APP_COLOR=pink simple-webapp-color
+In kubernetes we simply add an env, which is an array of plain key value
+
+	apiVersion: v1
+	kind: Pod
+	metadata:
+		name: simple-webapp-color
+	spec:
+		containers:
+			- name: simple-webapp-color
+			  image: simple-webapp-color
+			  ports:
+				- containerPort: 8080
+			  env:
+				- name: APP_COLOR
+				  value: pink  
+
+			  
+There are other way of setting environment variables like configMaps and Secrets the difference in this case is that we don't specify a value but a valueFrom
+
+
+	env:
+		- name: APP_COLOR
+		  valueFrom: 
+			configMapKeyRef: 
+
+	env:
+		- name: APP_COLOR
+		  valueFrom: 
+			secretKey: 

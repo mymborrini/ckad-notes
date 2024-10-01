@@ -1,0 +1,3 @@
+
+In order to create a pod inline:
+	. kubectl run redis --image=redis --namespace=dev

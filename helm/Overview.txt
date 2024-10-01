@@ -1,0 +1,339 @@
+Helm Overview
+
+K8s is awesome to manage complex infrastracture. 
+
+Even a simple WordPress site may need the following:
+ . A Deployment
+ . Persistence Volume
+ . Persistence Volumne Claim
+ . A Service
+ . A secret to store passwords
+
+
+For every object you may need a different yaml file, and manage labels between one file and the other could be really a mess.
+Helm change this kind of things.
+
+K8s does not care about our app in the whole, he just deploy a list of resources, he doesn't know each one of them is part of a big application, he takes care each resource individually
+Helm instead is build from the ground app to know about such stuff, that is why sometimes is called a package manager for k8s. It looks at the resources as a part of a big project, as a group.
+We just tell him what we want to change and he manage the right yaml file and update them accordingly.
+So for example if you have different services and different pods, you change a labels helm does not rerun all the application, but just the resource where the labels is currently used.
+
+The location where we can change all of this is called Values.yaml.
+
+
+helm install (the start)
+helm upgrade (He upgrade only the pods for the modification like we said before)
+helm rollback (since it's versioned, return to the previous version)
+helm uninstall (uninstall all the application)
+
+In this case helm is more a release manager
+
+----
+
+Helm is a package manager for kubernetes that makes easy to take application and service that are highly repeatable and can use in a lot of different scenarios, 
+and make them easy to deploy to a kubernetes cluster.
+
+Consider the following application:
+	-> A deployment with 2 replicas of an application with node.js
+	-> A mongoDB database
+	-> A service in order to access our application, and let's say is a NodePort service. NodePort means there is a one to one ratio between IP inside of and outside of our 
+	K8s cluster
+
+
+In order to deploy this we need a couple of yml file for the service and the deployment:
+
+deployment.yml
+	image: node/mongo:1
+	replicas: 2
+
+service.yml
+	type: NodePort
+	port: 8080
+
+
+Let's image you create all the configuration, so you're familiar with all the changes. But let's consider you have to move this project to another developer. He does not know how to manage
+all the configuration for the services ecc.. 
+
+
+So we have to separate the configuration data from all the templates I have where my application deployment is described.
+Helm is combining two particular components:
+ . A configuration => Values.yaml
+ . A template => Chart.yaml
+
+A chart is going to consist of all the files I'm going to templates so deployment.yml and service.yaml.
+
+So in order to move the data from the templates of the configuration:
+
+Let's consider having a configuration like this:
+
+Values.yml
+	deployment:
+		image: node/mongo:1
+		replicas: 1
+	service:
+		type: NodePort
+		port: 8080
+
+
+deployment.yml
+	image: {{Values.deployment.image}}
+	replicas: {{Values.deployment.replicas}}
+
+service.yml
+	type: {{Values.service.type}}
+	port: {{Values.service.port}}
+
+
+How does it works?
+Essentialy is enough to type:
+
+helm install myApp
+
+BUT you need to install a component in your kubernetes cluster called TILLER. 
+TILLER will take all the information helm send and converts them into somthing that kubernetes can understand.
+
+For every change is enough, after making changes 
+
+helm upgrade myApp
+
+or if something goes wrong
+
+helm rollback myApp
+
+-------
+
+
+Consider having the following yaml files:
+
+- deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+	name: wordpress
+	labels:
+		app: wordpress
+spec:
+	selector:
+		matchLabels:
+			app: wordpress
+			tier: frontend
+	strategy:
+		type: Recreate
+	template:
+		metadata:
+			labels:
+				app: wordpress
+				tier: frontend
+		spec:
+			containers:
+				- image: wordpress:4.8-apache
+				  name: wordpress
+
+- secret.yaml
+apiVersion: apps/v1
+kind: Secret
+metadata:
+	name: wordpress-admin-password
+data:
+	key: ckncvownvoiwnoievnweovnweovowevnow
+
+- pv.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+	name: wordpress-pv
+spec:
+	capacity:
+		storage: 20Gi
+	accessModes:
+		- ReadWriteOnce
+	gcePeristentDisk:
+		pdName: wordpress-2
+		fsType: ext4
+
+- pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+	name: wp-pv-claim
+	labels:
+		app: wordpress
+spec:
+	accessModes:
+		- ReadWriteOnce
+	resources:
+		requests:
+			storage: 20Gi
+
+- service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+	name: wordpress
+	labels:
+		app: wordpress
+spec:
+	ports:
+		- port: 80
+	selector:
+		app: wordpress
+		tier: frontend
+	type: LoadBalancer
+
+
+Some of this value are the same, but used in different files, or even the wordpress version, if someone wants to change it.
+
+So the first step is to convert this files to templates. So put them together in a folder named templates and change the values of the property with the syntax {{ .Values. ... }}
+
+
+- templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+	name: wordpress
+	labels:
+		app: wordpress
+spec:
+	selector:
+		matchLabels:
+			app: wordpress
+			tier: frontend
+	strategy:
+		type: Recreate
+	template:
+		metadata:
+			labels:
+				app: wordpress
+				tier: frontend
+		spec:
+			containers:
+				- image: {{ .Values.image }}
+				  name: wordpress
+
+- templates/secret.yaml
+apiVersion: apps/v1
+kind: Secret
+metadata:
+	name: wordpress-admin-password
+data:
+	key: {{ .Values.passwordEncoded }}
+
+- templates/pv.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+	name: wordpress-pv
+spec:
+	capacity:
+		storage: {{ .Values.storage }}
+	accessModes:
+		- ReadWriteOnce
+	gcePeristentDisk:
+		pdName: wordpress-2
+		fsType: ext4
+
+- templates/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+	name: wp-pv-claim
+	labels:
+		app: wordpress
+spec:
+	accessModes:
+		- ReadWriteOnce
+	resources:
+		requests:
+			storage: {{ .Values.storage }}
+
+- templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+	name: wordpress
+	labels:
+		app: wordpress
+spec:
+	ports:
+		- port: 80
+	selector:
+		app: wordpress
+		tier: frontend
+	type: LoadBalancer
+
+
+
+So where are all this values stored? All the values are stored in a file named values.yaml
+
+values.yaml
+image: wordpress:4.8-apache
+storage: 20Gi
+passwordEncoded: ckncvownvoiwnoievnweovnweovowevnow
+
+
+So whoever want to change the application can simply change the file values.yaml
+
+TOGETHER THE VALUES.yaml AND THE TEMPLATES.yaml FORM THE CHART
+
+The Chart has a file itself named Chart.yaml with a lot of information regarding the chart, like the version ecc...
+
+In artifacthub.io you can find a lot of charts published by other user, but there are other repository like bitnami ecc...
+
+artifacthub.io is the default repository, you can search in there by typing:
+
+  . helm search hub wordpress
+
+If you want to add a repository just type:
+
+  . helm repo add bitami https://charts.bitnami.com/bitnami
+  . helm search repo wordpress, to search in an added repository
+
+In order to have a list of repositories just type:
+  . helm repo list
+
+
+Once you have created your templates, the next step is to install the chart by typing:
+
+ . helm install release-name chart-name
+
+
+To list installed packages:
+ . helm list
+
+To uninstall packages:
+ . helm uninstall my-release
+
+If we only need to download and not install it, just type:
+ . helm pull --untar bitnami/wordpress
+
+The --untar because the chart is usually downloaded in an untar format, the --untar instead download the source.
+
+
+
+
+for example you can create different release of the same application on the SAME CLUSTER and each release is completly indipendent from one another
+
+ . helm install release-1 bitnami/wordpress
+ . helm install release-2 bitnami/wordpress
+ . helm install release-3 bitnami/wordpress
+ . helm install release-4 bitnami/wordpress
+ . helm install release-5 bitnami/wordpress
+ . helm install release-6 bitnami/wordpress
+
+ -------------------------------------------------------------------------------------------------------------------------
+ |	K8s Cluster													 |
+ |															 |
+ |															 |
+ |	|													     |	 |
+ |	|	--------	--------	--------	--------	--------	--------	     |	 |
+ |	|	Release 1 	Release 2	Release 3	Release 4	Release 5	Release 6|	     |	 |
+ |	|	--------	--------	--------	--------	--------	--------	     |	 |
+ |	|													     |	 |
+ |	|													     |	 |
+ |															 |
+ |															 |
+ --------------------------------------------------------------------------------------------------------------------------
+
+
+
+

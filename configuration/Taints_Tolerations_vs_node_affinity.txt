@@ -1,0 +1,77 @@
+Taints vs Node Affinity
+
+We have three node and three pods. Let' match the same pod and Node (1-2-3) => (1-2-3).
+
+    3		2	  1		Another Pod	Another Pod
+
+----------  ---------- ----------- 	---------- 	----------
+|	 | |	    | |		|	|	 |	|	 |
+|	 | |	    | |		|	|	 |	|	 |
+|	 | |	    | |		|	|	 |	|	 |
+|	 | |	    | |		|	|	 |	|	 |
+|	 | |	    | |		|	|	 |	|	 |
+| Node1  | | Node 2 | |	Node 3  |	|Node x	 |	| Node x |
+---------- ---------- -----------	----------- 	----------
+
+N.B We don't care about the Nodes x ot the other pod we just want to deploy the pod 1,2,3 in the relative node.
+
+In order to accomplish this goal we have to use both node affinity and taints and toleration. 
+
+
+TAINTS AND TOLERATIONS 
+With only taints and tolerations a the following situation can show up
+
+
+    3(Tol3)   2(Tol2)	 1(Tol1)	Another Pod	Another Pod
+
+ Taint1	    Taint2	Taint3
+----------  ---------- ----------- 	---------- 	----------
+|	 | |	    | |		|	|	 |	|	 |
+|	 | |	    | |		|	|	 |	|	 |
+|   1	 | |	    | |	  3	|	|   2	 |	|	 |
+|	 | |	    | |		|	| An Pod |	| An Pod |
+|	 | |	    | |		|	|	 |	|	 |
+| Node1  | | Node 2 | |	Node 3  |	|Node x	 |	| Node x |
+---------- ---------- -----------	----------- 	----------
+
+This is because Taints and tolerations don't not prevent node to choose another pod
+
+
+
+NODE AFFINITY
+With only node affinity the following situation can show up (ns = Node Selector)
+
+    3(ns3)   2(ns2)	 1(ns1)		Another Pod	Another Pod
+
+ Label1	    Label2	Label3
+----------  ---------- ----------- 	---------- 	----------
+|	 | |	    | |		|	|	 |	|	 |
+|	 | |	    | |		|	|	 |	|	 |
+|   1	 | |	2   | |	  3	|	|   	 |	|	 |
+|	 | | An Pod | |		|	|	 |	|	 |
+|	 | |	    | |		|	|	 |	|	 |
+| Node1  | | Node 2 | |	Node 3  |	|Node x	 |	| Node x |
+---------- ---------- -----------	----------- 	----------
+
+
+This is because node affinity does not prevent other pods to deploy on the node we labels
+
+
+TAINTS AND TOLERATIONS  + 
+NODE AFFINITY
+
+Finally with the combination of both of nodeAffinity and Taints and Tolerations the result we desired is achieved
+
+ 3(Tol3;ns3) 2(Tol2;ns2) 1(Tol1;ns1)	Another Pod	Another Pod
+
+ Taint1	    Taint2	Taint3
+ Label1	    Label2	Label3
+----------  ---------- ----------- 	---------- 	----------
+|	 | |	    | |		|	|	 |	|	 |
+|	 | |	    | |		|	|	 |	|	 |
+|   1	 | |	2   | |	  3	|	|   	 |	|	 |
+|	 | |	    | |		|	| An Pod |	| An Pod |
+|	 | |	    | |		|	|	 |	|	 |
+| Node1  | | Node 2 | |	Node 3  |	| Node x |	| Node x |
+---------- ---------- -----------	----------- 	----------
+

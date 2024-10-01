@@ -1,0 +1,89 @@
+CONFIG MAP:
+
+We previously see how to specify environment variables in pod definition file. See ./appendix/Kubernetes
+
+	env:
+	 - name: APP_COLOR
+	   value: blue
+	 - name: APP_MODE
+	   value: prod
+
+But this is a little bit difficult when you have a lot of pods, so we can pick this information from the pod definition file and put it inside the ConfigMap file.
+There are two phases
+	1 Create ConfigMap
+	2 Inject into Pod
+
+CREATE CONFIG MAP:
+Like other stuff in kubernetes there are two ways to define a configMaps, one Imperative and the other Declarative (using a File)
+A configMap file is a key: value dictionary like this
+
+APP_COLOR: blue
+APP_MODE: prod
+
+If you want to do the imperative way:
+	. kubectl create configmap <config-name> --from-literal=<key>=<value>
+Example:
+	. kubectl create configmap app-config --from-literal=APP_COLOR=blue --from-literal=APP_MODE=prod
+Or you can create a file and then type:
+	. kubectl create configmap app-config --from-file=app_config.properties
+
+If you use a declerative way you will create a config-map.yaml
+
+	apiVersion: v1
+	kind: ConfigMap
+	metadata:
+		name: app-config
+	data:
+		APP_COLOR: blue
+		APP_MODE: prod
+
+Then type:
+	. kubectl create -f config-map.yaml
+
+You can create how many config map as you need for several different porpouses. It is important to name this configMap properly in order to use them in the second part when 
+we inject them into the pod
+
+In order to see the configmap
+	. kubectl get configmaps
+
+INJECT INTO A POD:
+
+	apiVersion: v1
+	kind: ConfigMap
+	metadata:
+		name: simple-webapp-color
+		labels:
+			name: simple-webapp-color
+	spec:
+		containers:
+			- name: simple-webapp-color
+			  image: simple-webapp-color
+			  ports:
+				- containerPort: 8080
+			  envFrom:
+				- configMapRef:
+					name: app-config
+
+as you can see the envFrom is an array so, you can specify how many configMap as you need,
+You can even do something like this, so passing a single env:
+
+			  ports:
+				- containerPort: 8080
+			  env:
+				- name: APP_COLOR
+				  valueFrom:
+					configMapKeyRef:
+						name: app-config
+						key: APP_COLOR
+
+
+Or you can even inject the whole data as a file in a volume
+	volumes:
+		- name: app-config-volume
+		  configMap:
+			name: app-config
+
+The short for congimap is "cm", so to get how many configmap just type:
+	. k get cm
+
+

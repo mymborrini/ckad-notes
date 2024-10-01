@@ -1,0 +1,82 @@
+API VERSIONS:
+
+Under the apis we have different groups and each group has different version, so
+/apis
+ . /apps => v1
+ . /extensions
+ . /networking.k8s.io -> v1
+
+v1 are the versions. if v1 means that generally is in a stable versions. Other possible versions are therefore /v1beta1 or /v1alpha1
+
+So what are those API means:
+ . Alpha => It's the first name when the API id deployed, is not enabled by default but it could be enabled through some flags.
+  It may lack e2e tests and have bugs
+
+After some times the major bugs were fixed as well as the e2e tests are added, the apiVersion move to betaVersion
+
+ . Beta => It is enabled by default, it has minor bugs
+
+After a whle
+ . GA (Stable) => Highly reliable
+
+
+An Api group can support multiple version at the same time, for example:
+
+/apis
+ . /apps => v1, v1beta1, v1alpha1
+
+So you can type in a file
+
+apiVersion: apps/v1alpha1
+
+or 
+
+apiVersion: app/v1beta1
+
+or 
+
+apiVersion: apps/v1
+
+
+So when you type something like 'kubectl get deployment' which version the client will contact?
+There is something like Preferred/Storage which in general is the GA. In order to find out you can type:
+
+ . kubectl explain deployment
+
+Storage means that the object created is always in the storage version, and that's the way it is saved in ETCD as well; so the storage version is the version which the obejct is stored in ETCD in. 
+Only one can be the Preferred version and only one can be dthe Stoage version. It 's not necessary that they are the same version. Preferred version can be different than Storage Version.
+
+How do we manage to find the preferred API and the storage API
+
+The preferred api is listed when you list for that specific API.
+
+The storage Version is impossible to see through a command. The only way is to call the etcd database directly
+
+ . etcdctl ... get "/rgistry/deploymnets/default/blue"
+
+How do you enable/disable API Groups?
+
+In the kube-apiServer you can type the runtime-config parameter and add the version API you want to use. 
+
+So you have to go in /etc/kubernetes/manifests, make sure to make a copy of the file in order to not loose anything if you make some breaking changes.
+
+vi api-server.yml
+
+and add in api-server kubeconfig
+
+--runtime-config:<group>/<version>=true
+
+
+One method for get the preferredVersion is to initialize a kubectl proxy int a prot. so for example if you want to know the preferred version of the authorization.k8s.io api group:
+
+ .  kubectl proxy 8001
+
+and then make a curl directly to that proxy
+
+ . curl localhost:8001/apis/authorization.k8s.io
+
+The result returned will show you the versions and the preferred versions of the API.
+
+
+
+

@@ -1,0 +1,60 @@
+ETCD:
+
+How to be sure the datas are stored consistently and available in a distributed computed system.
+It's a key value pair database that assure you to have to correct value for your data at any type.
+
+Store kubernetes configuration data, state data and meta data. 
+
+
+IS REPLICATED:
+	Every Node in a Etcd cluster has access to the full dataStore 	
+
+IS CONSISTENT:
+	Every read is gonna return the most recent data write
+
+
+ETCD is based on RAPH ALGORITHM
+
+Let's create a very simple ETCD cluster of 4 nodes:
+
+	LEADER NODE
+
+FOLLOWER NODE 1
+FOLLOWER NODE 2
+FOLLOWER NODE 3
+
+Let's image the following:
+at key = 1 we have the value of 7
+
+
+Now a client wants to:
+	. update the value of 7 to 17
+
+
+The leader node don't change immediatly, instead it sends the request to each follower node.
+When a follower node has changed it returns an ack to the leader so the leader know that the node is updated. When the leader see that the MAJORITY of the nodes 
+has updated to the newest data; that's when the leader node update it's current datastore and return the ack to the client.
+
+The client does not need to concern about which node is the leader and can make any read/write request to every node in the cluster.
+
+So let's assume the client make a read request to a follower node that has not updated yet. What the follower node does is to forward the request to the leader node 
+and then receive the leader node value, which is 17.
+
+IS HIGHLY AVAILABLE
+
+
+So basic on RAPH ALgoritm what the need of a follower node, if every request still need to be checked in the Leader Node.
+
+Let's assume the leader node goes down. Immediatly basic on availability a new Node will be elected the leader. The leader will goes on and manage the replication for the cluster.
+
+IS FAST
+In a certain way... The problem is that etcd is not an in memory database, it will store data on the disk, so the bottle neck will be your disk speed
+
+IS SECURE
+You can enable https
+
+
+Kubernets use ETCD for its WATCH function.
+ETCD compared config data and state data, if there is a difference, etcd will let the cluster master node and k8s will reconfigure the whole thing according to the configuration. 
+This happened when youhave, for example, a replica of 2 pods and once goes down. In this case the config data is different from the state data and k8s add a 
+new pod in order to have two replicas.

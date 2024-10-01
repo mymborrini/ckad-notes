@@ -1,0 +1,114 @@
+API Groups:
+
+By interacting with k8s both you are using REST or Kubectl you are interacting with API Server.
+If we are using REST we have probably making this kind of requests, the first one to obtain information about the k8s master node and the second one to get the list of pods
+
+curl https://kube-master:6443/version
+{
+  "major": 1
+  "minor": 13
+  "gitVersion": ...
+}
+
+
+curl https://kube-master:6443/api/v1/pods
+{... list of pods... }
+
+The k8s api is grouped into multiple sub groups based on their pourpose:
+
+ . /metrics
+ . /healthz
+ . /version
+ . /api
+ . /apis
+ . /logs
+
+
+VERSION:
+Is for viewing the version of the cluster
+
+METRICS and HEALTH:
+Are for monitoring the health of the cluster
+
+LOGS
+Are using for integrating in third parties application
+
+Now we are focusing on the api responses for the cluster functionality, there are divided in two groups (CORE => /api) and (NAMED => /apis)
+
+CORE
+Is where all core functionality exists like pods, events, rc, pv, pvc, secrets, servgices, configmaps, bindings, namespaces ecc..
+
+NAMED
+Are more organized:
+ . /apps
+ . /extensions
+ . /networking.k8s.io
+ . /storage.k8s.io
+ . /authentication.k8s.io
+ . /certificates.k8s.io
+
+The ones above are API Groups
+
+Each one has then some sub-REOURCES like for example (/apps)
+
+/apps
+ . /deploymenst
+ . /replicasets
+ . /statefulsets
+
+And for each one a list of VERBS
+
+/apps/deployment
+ . list
+ . get
+ . create
+ . delete
+ . update
+ . watch
+
+You can even ask your k8s master to tell you all the apis available:
+
+ . curl http//kube-master:6443 -k
+
+paths:
+ . /api
+ . /api/v1
+ . /apis
+ . /apis/
+ . /healthz
+ . /logs
+ . /metrics
+ . /openapi/v2
+ . /swagger-2.0.0.json
+
+Remember that if you run a curl like this, you'll probably receive a 403 (Forbidden), you have to pass it the credentials or alternatively you can run a kubectl proxy on your local machine.
+This will read your credentials automatically and then call Kube ApiServer
+ 
+        -----------------       -----------------
+User => | Kubectl Proxy | ===> | Kube ApiServer |
+	-----------------	-----------------
+
+In this case you can simply type
+ . curl http://localhost:8001 -k
+
+
+And this will execute the command like below.
+
+N.B. 
+
+Kube Proxy IS DIFFERENT FROM kubectl Proxy
+
+Kube Proxy is the one used to enable connectivity between pods and services acrosss differnet nodes in the cluster (probably better explained in CKA)
+Kubectl Proxy is an http proxy created by kubectl to manage the connectivity to the cluster.
+
+Summary:
+All the resources in k8s are grouped into API groups
+In case of named apis, each resources have its own list of RESOURCES and for each resources you can perfom different operation named VERBS
+
+
+This is very important in the Authorization part, because this apis will be used to authorize or deny the access to a user
+
+
+In order to get some information about the shortNames to use just type:
+
+ . k api-resources

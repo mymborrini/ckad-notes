@@ -1,0 +1,46 @@
+Security context
+
+Like in docker you can specify the user and his capabilities. You can configure them at the pod level or at container level. If you configure
+both the settings and the container the settings on the container will override the settings in the pod.
+
+Let's define a pod definition file where the security context is set at the pod level
+
+apiVersion: v1
+kind: Pod
+metadata:
+	name: web-pod
+spec:
+	securityContext:
+		runAsUser: 1000
+	containers:
+		- name: ubuntu
+		  image: ubuntu
+		  command:
+			- sleep
+			- 3600
+
+
+And at the container level, at the container level you can also specify capabilities, this is available at the container level, not at the POD level:
+
+apiVersion: v1
+kind: Pod
+metadata:
+	name: web-pod
+spec:
+	containers:
+		- name: ubuntu
+		  image: ubuntu
+		  securityContext:
+			runAsUser: 1000
+			capabilities:
+				add: ["MAC_ADMIN"]
+		  command:
+			- sleep
+			- 3600
+
+To open a terminal in the container simply type:
+  . k exec ubuntu-sleeper
+
+So In order to get the user of a pod you can simply type:
+ . k exec ubuntu-sleeper -- whoami
+

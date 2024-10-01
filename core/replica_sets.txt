@@ -1,0 +1,178 @@
+controllers are the brain within kubernetes
+A replica is a replication controller.
+
+If a pod fails the user cannot access to the application, in order to avoid
+this we would like to have multiple instance at the same time. The replication
+controller help us to manage different replica of the same application and
+this increase the application availability.
+
+Even if you want to have a single pod replication controller can help because
+is able to run the pod again once it's failed
+
+The main role of the replication controller is to assure that the number of
+instance selected in the configuration is running, if this number is 1 or 100
+doesn't matter. 
+
+So it has to create multiple pods of the same instance to load balancing as
+expected. If the number of user increase we create a new pod in order to
+balance the number of user which is increased.
+
+If the resource of our node finish the replica controller will create new pods
+in a new node in the cluster like the following picture show:
+
+
+     ----------------			    --------------------	
+     |	------------+-----------------------+----------------  |
+     | 	|	    |			    |		    |  |
+     |	|  POD	POD |			    |	POD 	POD |  |
+     |	|	    |	REPLICA CONTROLLER  |		    |  |		
+     |	|	    |			    | 		    |  |		
+     |	------------+-----------------------+----------------  |
+     |              |			    |		       |		
+     |	NODE 1	    | 			    |	NODE 2	       |	
+     |--------------|			    |-------------------
+
+
+So the replication controller spans across multiple nodes in the cluster
+
+There are two terms really similar replication controller and replica set,
+their purpouse is similar but they are not the same
+
+Once created we still can see replicacontroller created by typing:
+  
+   - kubectl get replicationcontroller
+
+And the pods created AFTER the replicaController is created:
+   - kubectl get pods
+
+An example of yaml
+
+apiVersion: v1
+kind: ReplicationController
+
+metadata:
+  name: myapp-rc
+  labels:
+    app: myapp
+    type: front-end
+
+spec:
+  template: 
+  # Here we have to define the POD, it's enough to move all the lines in metadata and spec of the pod, excluding the apiVersion and the kind
+
+    metadata:
+      name: myapp-pod
+      labels: 
+        app: myapp
+        type: front-end
+    spec: 
+      containers:
+        - name: nginx-container
+          image: nginx
+
+  replicas: 3
+    # Here we define the behavoiur of the replica, how many replica we want for example
+
+
+
+
+
+"Replication controller" is the old way of manage replication "replica set" is the
+new way
+
+
+What we have said before is still true for replica set
+
+In order to create a replicaSet the command is still the same (the one from
+the file so kubectl create -f <fileName.yml>
+
+kubectl get replicaset
+
+
+So what's the deal with labels and selectors? Why do we need to add labels in
+kubernetes?
+
+As we said before replicaSet has to keep alive an exact number of replica of
+our application (pod). How can replicaSet know which pods keep monitoring in
+the middle of hundred of pods, potentially. 
+
+By putting labels: type: front-end we provide a filter for replicaSet this way
+the replicaSet knows which pods to monitor.
+
+So let's image this scenario we have already three pods of the same
+application and we want to monitor them, so we add a replicaSet AFTER the
+creation of the pods. In this case do we really need a template section under
+spec?
+
+YES WE DO, because in case of one of the POD falls down the replicaSet needs
+to know how to create a new pod for that specific application
+
+Now let's see how we scale a replicaSet from 3 to 6 for example.
+You can update the file, putting replicas: 6 and then type the command to
+replace the replicaSet
+
+ - kubectl replace -f replicaset-definition.yml
+
+
+The second way to do it is to use the scale command 
+
+ - kubectl scale --replicas=6 -f replicaset-definition.yml
+
+Or if you don't want to type the file, maybe because you're not in the folder
+right now
+
+ - kubectl scale --replica=6 replicaset (which is the type) myapp-replicaset
+   (which is the name)  so something like this:
+ - kubectl scale --replica=6 replicaset myapp-replicaset
+
+There is even a way to scale replica based on load, but we will see it in the
+future
+
+If you get an error because your yml file is not correct, there is a command that 
+can help you it will explain every part of the yml file for the replicaset:
+
+ - kubectl explain rs
+
+Instead of creating a file, change it, and then replace you can simply run the command
+
+ - kubectl edit rs <replicasetId> 
+
+Then you can simply delete the replicaset and recreate it (or in this case delete all the pods and 
+the replicas set will raise new instances based on the new configuration)
+
+
+An example of yaml:
+
+apiVersion: apps/v1 # If you set the apiVersion wrong you have an error like this: unable to recognize "..yml" no matches for /, Kind=ReplicaSet
+
+kind: ReplicaSet
+
+metadata:
+  name: myapp-replicaset
+  labels:
+    app: myapp
+    type: front-end
+
+spec:
+  template:
+
+    metadata: 
+      name: myapp-pod
+      labels:
+        app: myapp
+        type: front-end
+    spec:
+      containers:
+        - name: nginx-controller
+          image: nginx
+  replicas: 3
+  selector:
+    # this is one of the major difference from ReplicaController and this is because replicaSet can manage pods which are created before the replicaSet itself
+    # The selector is sitll available in ReplicaController but it's optional. So if you don't specify the selector the pods will be taken automatically from the template
+    # In case of ReplicaSet this is required, like the following
+    matchLabels:
+      type: front-end
+      
+
+
+

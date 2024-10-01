@@ -1,0 +1,650 @@
+INGRESS:
+
+Let's start with an simple scenario, I' m deploying an application (WEAR) for a company which is simple online store.
+
+===============================================================================================================================
+STEP 1
+
+My application  will be available on www.my-online-store.com
+
+The deployment could be something like this
+
+
+	---------------------------
+	| www.my-online-store.com |  => http://<node-ip>:38080
+	---------------------------		||
+		 ---------------		||
+		 |    38080	| <===============
+------------------------------------------------------------------------------------------------------------------------------
+			|
+	 --------------------------------
+	 |   Service NodePORT: WEAR     | 	
+	  -------------------------------
+			|
+			|
+	--------------------------------------
+	|	Deployment	      	     |
+	|				     |
+	|				     |
+	|   -----------------		     |
+	|   |	Pod: WEAR   | 		     |
+	|   -----------------		     |
+	--------------------------------------
+			|
+			|
+			|
+	   --------------------------------
+	   |	Service CLUSTER IP: MYSQL  | 	
+	   --------------------------------
+			|
+	   ------------------
+	   |	Pod: MYSQL  | 	
+	   ------------------
+
+
+------------------------------------------------------------------------------------------------------------------------------
+
+
+===============================================================================================================================
+STEP 2 (ON PREMISE)
+
+Now my application is complete and can be reached through http://<node-ip>:38080
+
+Let's imagine that the traffic increase, we increase the replica and the service will split the traffic.
+As a second option we don't want to let the client type the node-ip so:
+Then you don't want the user to remeber the port either, but node can only be use a port higher then 80.
+So you set a proxy server to listern to port 80 and redirect everything to node-ip:38080
+
+	
+	http://<node-ip>:38080  =======> http://www.my-online-store.com ==
+									 ||	
+									 ||
+		------							 ||
+		| 80 |<<==================================================
+	---------------------------
+	|			  |	
+	|	Proxy-Server	  |==============
+	---------------------------		||
+		 ---------------		||
+		 |    38080	| <===============
+------------------------------------------------------------------------------------------------------------------------------
+			|
+	 --------------------------------
+	 |   Service NodePORT: WEAR     | 	
+	  -------------------------------
+			|
+			|
+	--------------------------------------
+	|	Deployment	      	     |
+	| --------------|		     |
+	| |  -----------------		     |
+	| |--|	Pod: WEAR   | 		     |
+	| |  -----------------		     |	
+	| |				     |	 
+	| |  -----------------		     |
+	| |--|	Pod: WEAR   | 		     |
+	| |  -----------------		     |
+	| |				     |
+	| |  -----------------		     |
+	| |--|	Pod: WEAR   | 		     |
+	|   -----------------		     |
+	--------------------------------------
+			|
+			|
+			|
+	   --------------------------------
+	   |	Service CLUSTER IP: MYSQL  | 	
+	   --------------------------------
+			|
+	   ------------------
+	   |	Pod: MYSQL  | 	
+	   ------------------
+
+
+------------------------------------------------------------------------------------------------------------------------------
+
+
+===============================================================================================================================
+STEP 2 (ON GOOGLE CLOUD PLATFORM)
+
+Instead of NodePort we can set our Service of type LoadBalancer. By doing so k8s will do everything it does for a NodePort, so it will
+create a NodePort for the service and in addition it send a request to GCP to provision a NETWORK LOADBALANCER for this service.
+When receving the request GCP automatically deploy a load balancer configured to route traffic to the service port on all nodes
+and return this information to K8s
+
+
+		http://www.my-online-store.com ==
+					 	||	
+						||
+		------				||
+		| 80 |<<==========================
+	---------------------------
+	|			  |	
+	|    GCP load-balancer	  |==============
+	---------------------------		||
+		 ---------------		||
+		 |    38080	| <===============
+------------------------------------------------------------------------------------------------------------------------------
+			|
+	 --------------------------------
+	 |   Service LoadBalancer: WEAR     | 	
+	  -------------------------------
+			|
+			|
+	--------------------------------------		
+	|	Deployment	      	     |		
+	| --------------|		     |		
+	| |  -----------------		     |		
+	| |--|	Pod: WEAR   | 		     |		
+	| |  -----------------		     |		
+	| |				     |	 	
+	| |  -----------------		     |		
+	| |--|	Pod: WEAR   | 		     |		
+	| |  -----------------		     |		
+	| |				     |		
+	| |  -----------------		     |		
+	| |--|	Pod: WEAR   | 		     |		
+	|   -----------------		     |		
+	--------------------------------------		
+			|
+			|
+			|
+	   --------------------------------
+	   |	Service CLUSTER IP: MYSQL  | 	
+	   --------------------------------
+			|
+	   ------------------
+	   |	Pod: MYSQL  | 	
+	   ------------------
+
+
+------------------------------------------------------------------------------------------------------------------------------
+
+===============================================================================================================================
+STEP 3
+
+Let's imagine our application grows and now we have a streaming video service. We want our new application to be served to the users at http://www.my-online-store.com/watch.
+The streaming video service is a completly different applications, so we deploy it as a parallel deployment and a parallel LoadBalancer Service.
+Rember you have to pay for each of this loadbalancer, and having too many can inverse your cloud bill (aka you pay more than what you earn from your application on cloud).
+How do you direct traffic between this two load balancer?
+You need another proxy to redirect your urls to the right load balancer, every time you need a service you have to change this load balancer configuration and in the end
+you want to secure your contents so you want to enable SSL. Where do you configured that??
+You want to configure in one place and want to manage in only a single place to avoid any kind of problems.
+This could be great if all this part could be inside you k8s definition and be configured as a single defintion file.
+That is when INGRESS comes in.
+
+
+https://www.my-online-store.com
+		||
+		||
+		||			
+		------
+		| 80 |
+	---------------------------
+	|		    /	  |
+	| GCP load-balancer /watch|===========================================
+	---------------------------					     ||
+		||							     ||
+		||							     ||		
+		http://www.my-online-store.com ==	   http://www.my-online-store.com/watch ==
+					 	||					 	||
+						||						||
+		------				||		------				||
+		| 80 |<<==========================		| 80 |<<==========================
+	---------------------------			---------------------------
+	|			  |			|			  |		
+	|    GCP load-balancer-1  |==============	|    GCP load-balancer-2  |==============
+	---------------------------		||	---------------------------		||
+		 ---------------		||			---------------		||
+		 |    38080	| <===============			|    38282	| <=======
+------------------------------------------------------------------------------------------------------------------------------
+			|							|
+	 --------------------------------			--------------------------------
+	 |   Service LoadBalancer: WEAR     | 		 	|   Service LoadBalancer: VIDEO |	
+	  -------------------------------			-------------------------------
+			|						|
+			|						|
+	--------------------------------------		--------------------------------------
+	|	Deployment	      	     |		|	Deployment	      	     |
+	| --------------|		     |		| --------------|		     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |--|	Pod: WEAR   | 		     |		| |--|	Pod: VIDEO   | 		     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |				     |	 	| |				     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |--|	Pod: WEAR   | 		     |		| |--|	Pod: VIDEO   | 		     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |				     |		| |				     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |--|	Pod: WEAR   | 		     |		| |--|	Pod: VIDEO   | 		     |
+	|   -----------------		     |		|   -----------------		     |
+	--------------------------------------		--------------------------------------
+			|
+			|
+			|
+	   --------------------------------
+	   |	Service CLUSTER IP: MYSQL  | 	
+	   --------------------------------
+			|
+	   ------------------
+	   |	Pod: MYSQL  | 	
+	   ------------------
+
+
+------------------------------------------------------------------------------------------------------------------------------
+
+
+===============================================================================================================================
+STEP 4
+
+Ingress helps user access your application in a single external accessible URL that you can configure to route traffic to different 
+services within your cluster based on your URL path, and at the same time implements SSL security as well.
+Think of ingress as a layer 7 load balancer inside your k8s cluster.
+Even with ingress you MUST define a NodePort or a LoadBalancer in case of Cloud, but this is only a one time configuration.
+
+		
+		https://www.my-online-store.com ==
+					 	||	
+						||
+		------				||
+		| 80 |<<==========================
+	---------------------------
+	|			  |	
+	|    GCP load-balancer	  |==============
+	---------------------------		||
+		 ---------------		||
+		 |    38080	| <===============
+------------------------------------------------------------------------------------------------------------------------------
+			|
+	--------------------------------	
+	|   Service LoadBalancer: INGRESS     |
+	--------------------------------	
+			|
+	-----------------------------------------------------------------------------------------
+	|											|
+	|			INGRESS								|
+	|											|
+	-----------------------------------------------------------------------------------------
+			|							|
+			|							|
+	 --------------------------------			--------------------------------
+	 |   Service LoadBalancer: WEAR     | 		 	|   Service LoadBalancer: VIDEO |	
+	  -------------------------------			-------------------------------
+			|						|
+			|						|
+	--------------------------------------		--------------------------------------
+	|	Deployment	      	     |		|	Deployment	      	     |
+	| --------------|		     |		| --------------|		     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |--|	Pod: WEAR   | 		     |		| |--|	Pod: VIDEO   | 		     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |				     |	 	| |				     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |--|	Pod: WEAR   | 		     |		| |--|	Pod: VIDEO   | 		     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |				     |		| |				     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |--|	Pod: WEAR   | 		     |		| |--|	Pod: VIDEO   | 		     |
+	|   -----------------		     |		|   -----------------		     |
+	--------------------------------------		--------------------------------------
+			|
+			|
+			|
+	   --------------------------------
+	   |	Service CLUSTER IP: MYSQL  | 	
+	   --------------------------------
+			|
+	   ------------------
+	   |	Pod: MYSQL  | 	
+	   ------------------
+
+
+------------------------------------------------------------------------------------------------------------------------------
+
+So how INGRESS works, how can you load balancing, how can you implement SSL? More or less is similar to having a NGINX POD 
+that will redirect everything to the right service. More or less like how I did in e-globe in the on-premise env
+
+In order to do this you need an INGRESS CONTROLLER and an INGRESS RESOURCES
+
+
+
+INGRESS CONTROLLER
+===================
+
+The solution I deploy is known as a INGRESS CONTROLLER
+You don't have an ingress controller in k8s by default, you must deploy one. What do you deploy? There are a number of solution available for ingress:
+
+GCP HTTP(S) Load Balancer (GCE)
+Nginx
+Contour
+HaProxy 
+traefik
+Istio
+
+GCE and nginx are currently supported by the k8s project. We will use NGINX.
+Ingress controller are not a simple load balancer, ingress component has additional logic build into it to monitor the k8s cluster for new definitions or additional
+resources
+And configure the Niginx server accordingly .
+
+Nginx controller is deployed as any other deployment:
+
+
+apiVersion: extension/v1beta
+kind: Deployment
+metadata:
+	name: nginx-ingress-controller
+spec:
+	replicas: 1
+	selector:
+		matchLabels:
+			name: nginx-ingress
+	template:
+		metadata:
+			labels:
+				name: nginx-ingress
+		spec:
+			containers:
+				- name: nginx-ingress-controller
+				  image: quay.io/kubernetes-ingress-controller/nginx-ingress-controller:0.21.0
+			args:
+				- /nginx-ingress-controller
+				- --configmap=${POD_NAMESPACE}/nginx-configuration
+			env:
+				- name: POD_NAME
+				  valueFrom:
+					fieldRef:
+						fieldPath: metadata.name
+				- name: POD_NAMESPACE
+				  valueFrom:
+					fieldRef:
+						fieldPath: metadata.namespace
+			ports:
+				- name: http
+				  containerPort: 80
+				- name: https
+				  containerPort: 443
+
+
+This is a SPECIAL IMAGE of nginx design for k8s, so it has its own set of requirements.
+Within the image the nginx program is stored at location: /nginx-ingress-controller so you must pass that in the command to start the nginx controller service.
+
+Nginx has by its own different configuration options:
+ . err-log-path
+ . keep-alive
+ . ssl-protocols
+
+In order to decouple this configuration you have to create a configMap and set it in the configuration of args of the container
+
+kind: ConfigMap
+apiVersion: v1
+metadata:
+	name: nginx-configuration
+
+
+You have to pass also 2 environemnts variables which manage the pod name and the pod namespace it is deployed, the nginx requires the configuration data to read this
+through the pod configuration.
+
+And finally you have to pass the ports to the ingress controller which are 80 and 443.
+
+With that you have to create a service to expose the ingress controller to the external world
+
+apiVersion: v1
+kind: Service
+metadata:
+	name: nginx-ingress
+spec:
+	type: NodePort (or LoadBalancer)
+	ports:
+		- port 80
+		  targetPort: 80
+		  protocol: TCP
+		  name: http
+		- ports: 443
+		  targetPort: 443
+		  protocol: TCP
+		  name: https
+	selector:
+		name: nginx-ingress
+
+As mentioned before the ingress change the nginx configuration when new resource appears or some definitions change. In order to do that it needs a ServiceAccount
+with the correct roles, clusterRoles and rolesBinding.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+	name: nginx-ingress-serviceaccount
+
+
+So to summaryze with the deployment of an ingress you have to:
+
+ . Deploy the ingress
+ . A service to expose it
+ . A ConfigMap to feed configuration data
+ . A serviceAccount with the right permission, to access all this object.
+
+
+In order to retrieve all the information of the INGRESS CONTROLLER the command is 
+
+ . k get deploy
+
+
+
+INGRESS RESOURCES
+==================
+
+Ingress resources is a set of rules and configuration apply to the ingress controller. You can write rules to forward all the traffic to a single application or dispatch the 
+traffic based on the url.
+
+For example you can choose to separate your traffic based on the suffix of the url so /wear or /video
+
+
+	-----------------------------------------------------------------------------------------
+	|					/wear						|
+	|			INGRESS		/video						|
+	|											|
+	-----------------------------------------------------------------------------------------
+			|							|
+			|							|
+	 --------------------------------			---------------------------------
+	 |   Service LoadBalancer: /wear | 		 	|   Service LoadBalancer: /video |	
+	  -------------------------------			---------------------------------
+			|						|
+			|						|
+	--------------------------------------		--------------------------------------
+	|	Deployment	      	     |		|	Deployment	      	     |
+	| --------------|		     |		| --------------|		     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |--|	Pod: WEAR   | 		     |		| |--|	Pod: VIDEO   | 		     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |				     |	 	| |				     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |--|	Pod: WEAR   | 		     |		| |--|	Pod: VIDEO   | 		     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |				     |		| |				     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |--|	Pod: WEAR   | 		     |		| |--|	Pod: VIDEO   | 		     |
+	|   -----------------		     |		|   -----------------		     |
+	--------------------------------------		--------------------------------------
+
+
+Or for example you can choose to separate them based on the domain name so wear.my-online-store | video.my-online-store
+
+	-----------------------------------------------------------------------------------------
+	|					wear.my-online-store				|
+	|			INGRESS		watch.my-online-store				|
+	|											|
+	-----------------------------------------------------------------------------------------
+			|							|
+			|							|
+	 --------------------------------			---------------------------------
+	 |   Service LoadBalancer:      | 		 	|   Service LoadBalancer:   	 |	
+	 |   wear.my-online-store       | 		 	|   watch.my-online-store   	 |
+	  -------------------------------			---------------------------------
+			|						|
+			|						|
+	--------------------------------------		--------------------------------------
+	|	Deployment	      	     |		|	Deployment	      	     |
+	| --------------|		     |		| --------------|		     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |--|	Pod: WEAR   | 		     |		| |--|	Pod: VIDEO   | 		     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |				     |	 	| |				     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |--|	Pod: WEAR   | 		     |		| |--|	Pod: VIDEO   | 		     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |				     |		| |				     |
+	| |  -----------------		     |		| |  -----------------		     |
+	| |--|	Pod: WEAR   | 		     |		| |--|	Pod: VIDEO   | 		     |
+	|   -----------------		     |		|   -----------------		     |
+	--------------------------------------		--------------------------------------
+
+
+Let's take a look on how to define all of that in more details, of course is an ingress configuration file.
+
+
+ingress-wear.yml
+
+apiVersion: extensions/v1beta1 (This could be exact anymore, always refers to the documentation for the right apiVersion)
+kind: Ingress
+metadata:
+	name: ingress-wear
+spec:
+	backend: 
+		serviceName: wear-service
+		servicePort:	80
+
+
+
+The example above is for a single backend. To manage multiple service redirection you have to works with rules for example:
+
+RULE1 => www.my-online-store.com 
+
+It will render also:
+www.my-online-store.com/wear
+www.my-online-store.com/watch
+www.my-online-store.com/listen -> 404
+
+RULE2 => www.wear.my-online-store.com:
+
+It will render also:
+www.wear.my-online-store.com/
+www.wear.my-online-store.com/returns
+www.wear.my-online-store.com/support
+
+RULE3 => www.watch.my-online-store.com
+
+It will renderAlso:
+www.watch.my-online-store.com/
+www.watch.my-online-store.com/movies
+www.watch.my-online-store.com/tv
+
+RULE4 => Everything else:
+
+www.listen.my-online-store.com -> 404
+www.eat.my-online-store.com -> 404
+www.drink.my-online-store.com/tv -> 404 
+
+
+So each rules for each domain name and for each rule you have different path
+		
+
+ingress-rule1.yml
+
+apiVersion: extensions/v1beta1 
+kind: Ingress
+metadata:
+	name: ingress-wear-watch
+spec:
+	rules:
+		- http:
+			paths: 
+				- path: /wear
+				  backend:
+					serviceName: wear-service
+					servicePort: 80
+				- path: /watch
+				  backend:
+					serviceName: video-service
+					servicePort: 80
+
+After you create this ingress and make a describe here is a probably output:
+
+Name:			ingress-wear-watch
+Namespace: 		default
+Address:
+Default backend:	default-http-backend:80 (<none>)
+Rules:
+   Host    Path    Backends
+   ----    ----    --------
+   *
+	   /wear	wear-service:80 (<none>)
+	   /watch	watch-service:80 (<none>)
+Annotations:
+Events:
+   Type    Reason  Age  From				Message
+   ----    ------  ---  ----                            --------
+   Normal  CREATE  14s  nginx-ingress-controller        Ingress default/ingress-wear-watch
+
+
+
+What DEFAULT BACKEND COULD BE?
+
+If the user tries to access the ingress and the url does not match any of the rules, it will automatically redirect to the default backed
+In this case there is a service named default-http-backend, so you have to remember to deploy such a service. In order to understand is the service which manage the 404
+
+
+
+Now let's consider a situation where you have rules 2 and 3, So you have to create new rules, one for each domain.
+To split traffic by domain name we use the host Field
+
+
+
+ingress-rule2-3.yml
+
+apiVersion: extensions/v1beta1 
+kind: Ingress
+metadata:
+	name: ingress-wear-watch
+spec:
+	rules:
+	  	- host: wear.my-online-store.com
+		  http:
+			paths: 
+				  - backend:
+					serviceName: wear-service
+					servicePort: 80
+
+	  	- host: watch.my-online-store.com
+		  http:
+			paths: 
+				  - backend:
+					serviceName: watch-service
+					servicePort: 80
+
+In this case we only have a single backend path for each rules, but you can have of course multiple paths.
+
+In order to retrieve all the information of the INGRRESS RESOURCE the command is 
+
+ . k get ingress
+
+
+TIPs after solution:
+
+ . If the default backend is not specified so <default> for instance the traffic will go nowhere and it will be lost.
+
+ . We cannot use the same ingress resource for different namespaces, we have to create an ingress resource for each namespace
+
+ . If you want to create ingress like imperative command remember you can type something like
+	. k create ingress --help
+ . Ingress returns to the application the url as it is. So for example if we have something like /something/pay, the application will receive something/pay.
+The application may not have the /pay at the end but this could be necessary to us to create a redirect. In this case we have to do as we did in nginx for the translation. 
+We have to rewrite the url after being processed before it is forwarded to the application.
+So what we have to do is to follow the documentation:
+
+metadata:
+	annotations:
+		nginx.ingress.kubernetes.io/rewrite-target: /
+
+In this case specifically is enough to do this, so only the <domain>:<port> will be called without anything which is apened to it
+
+			

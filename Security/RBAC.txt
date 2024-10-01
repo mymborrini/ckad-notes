@@ -1,0 +1,74 @@
+RBAC:
+Role Based Access Control
+
+How do we create a role?
+
+A Role is just another k8s resource so
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+rules:
+ - apiGroups: [""]
+   resources: ["pods"]
+   verbs: ["list","get","create","update","delete"]
+ - apiGroups: [""]
+   resources: ["ConfigMap"]
+   verbs: ["create"]
+
+
+For CORE group you can leave apiGroups as blank, for any other groups you have to specify the group name.
+
+Create the role like any other resource
+
+ . k create -f <filename>
+
+
+In order to link the user to the role, we create another object called RoleBinding
+
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devuser-developer-binding
+subjects:
+  - kind: User
+    name: dev-user
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: developer
+  apiGroup: rbac.authorization.k8s.io
+
+
+Create the rolebinding using the same command.
+N.B. Remember Role and RoleBinding fall into the scope of namespaces, so in the previous example the namespace is the default one. 
+If you want to specify a different namespace just add it in the metadata section.
+
+WHAT IF AS A USER I WOULD LIKE TO SEE IF I HAVE ACCESS TO A PARTICULAR RESOURCE IN THE CLUSTER:
+
+Just type for example:
+
+ . kubectl auth can-i create deployments
+ . kubectl auth can-i delete nodes 
+
+If you are an admin you can impersonate another user to check their permission. Just type:
+
+ . kubectl auth can-i create deployments --as dev-user
+ . kubectl auth can-i create pods -- as dev-user
+
+
+If you want to get access to a user to pods... but not all pods just some of them.
+For example if you have five pods: blue, orange, purple, green, pink and you want to restrict the commands only to blue and orange just create the file like the following:
+
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+rules:
+ - apiGroups: [""]
+   resources: ["pods"]
+   verbs: ["get","create","update"]
+   resourceNames: ["blue", "orange"]

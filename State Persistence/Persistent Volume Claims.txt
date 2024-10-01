@@ -1,0 +1,105 @@
+PERSISTENT VOLUMES CLAIMS:
+
+
+Persistent volume claim is responsible to make persistent volume accessible by nodes.
+Persistent volume and persistent volume claims are two separated objects in the namespace, at the end k8s bind the persistent volume and the peristent volume claim 
+N.B. Every persistent volume claim is bound to a single persistent volume
+
+
+How the bind works, it could be madeby name, but even by specifying:
+
+Sufficient Capacity
+Access Modes
+Volume Modes
+Storage Class
+
+Finally smaller claim make a bound to a larger volume if all other criteria matches and there are no better options.
+e. g.
+
+PVC ask for a sufficient Capacity of 1Gi,
+there is only one PV with 100Gi, the bind still is created if all other specification matches.
+
+
+Since there is only one PVC for PV noone else could use the remaining 99Gi of capcity.
+
+If there are no PV available PVC will remain in a pending state
+When new volume are available PVC will automatically be bound to this new volume
+
+
+
+apiVersion: v1
+kind: PeristentVolumeClaim
+metadata:
+	name: myclaim
+spec:
+	accessModes:
+		- ReadWriteOnce
+	resources:
+		requests:
+			storage: 500Mi
+
+
+When the pvc is created it will be in a pending state, then k8s will look at the peristent volumen created previously
+
+
+apiVersion: v1
+kind: PersistentVolume
+metadata: 
+	name: pv-vol1
+spec:
+	accessModes:
+		- ReadWriteOnce
+	capacity:
+		storage: 1Gi
+	awsElasticBlockStore:
+		volumeID: <volume-id>
+		fsType: ext4
+
+
+The accessMode match
+The capacity storage is more than the one requested by the PVC
+
+
+==> The PVC is bound to the persistent Volume
+
+
+If now delete that claim, what happened to the volume?
+
+You can set a property 
+
+ . persistenVolumeReclaimPolicy: Retain
+
+With this one it will be not bounded to another PVC, you have to delete manually (this is useful if you want to collect the data within it before delete it)
+
+Or the property:
+
+ . persistenVolumeReclaimPolicy: Recycle
+
+In this case the volume will be scrapt before making it availabel for new PVCs.
+
+Once you created a PVC, you have to use it in a POD defintion file by specifying the PVC Claim name under persistentVolumeClaim section in the volumes section like this:
+
+apiVersion: v1
+kind: Pod
+metadata:
+	name: mypod
+spec:
+	containers:
+  	 	- name: myfrontend
+		  image: nginx
+		  volumeMounts:
+			- mountPath: "/var/www/html"
+			  name: mypd
+	volumes:
+		- name: mypd
+		  persistentVolumeClaim:
+			claimName: myclaim
+
+The same is of course true for the Deployments.
+
+
+
+
+There are different types of volumes supported by k8s. A number of cloud providers and storage vendors have built their sotrage plugins to support the k8s Infrastracture.
+
+ 

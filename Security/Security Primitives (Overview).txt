@@ -1,0 +1,39 @@
+SECURITY PRIMITIVES (Overview)
+
+
+Secure Hosts:
+----------------
+The host where the cluster is running must be secure hosts which means:
+ . Password based authentication disabled
+ . SSH Key based authentication only
+
+
+Secure K8s
+------------
+With kube-apiserver you can do more or less anything to the k8s cluster, for this reason this kube-apiserver must be authenticated.
+
+ . Who can access? Authentication
+	You have different choice:
+	- Files - Username and Passwords
+	- Files - Username and Tokens
+	- Certificates
+	- External Authentication providers - LDAP
+	- Service Accounts (for machine)
+ . What can they do?
+	- RoleBaseAccessControl (RBAC) Authorization
+	- AttributeBaseAccessControl (ABAC) Authorization
+	- Node Authorization
+	- Webhook node.
+
+
+TLS Certificates
+-----------------
+
+Kube ApiServer <==> ETCD Cluster must use TLS Certificate
+Kube ApiServer <==> Kube Proxy must use TLS Certificate
+Kube ApiServer <==> Kube Scheduler must use TLS Certificate
+Kube ApiServer <==> Kubelet must use TLS Certificate
+Kube ApiServer <==> Kube Controller Manager Cluster must use TLS Certificate
+
+
+

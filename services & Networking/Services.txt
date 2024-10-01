@@ -1,0 +1,351 @@
+SERVICES:
+
+Enable communications between various components between and outside of the application. 
+Let's image we have 3 group of pods:
+
+
+
+
+---------- ---------- ----------- 		 ----------- 
+|	 | |	    | |		|		 |	   |
+|	 | |	    | |		|		 |	   |
+|	 | |	    | |		|		 |	   |
+|	 | |	    | |	pods	|		 |	   |
+| pods 	 | | pods   | |	db	|		 | External|
+| backend| | fronend| |	connectivity  |		 | DB	   |
+---------- ---------- -----------		 -----------
+
+
+Service manage the connectivity so :
+
+	
+		CLients
+		    ||	
+		------------
+		  Services 
+		------------
+		    |
+		------------
+		| FE Pods  |
+		------------
+		    |
+	 ---------------------------	
+	 |			    |	
+      ------------                  ------------        
+	Services		     Services
+      ------------                  ------------		
+	 |				|
+	------------	            ------------            ------------                  -----------
+	| BE Pods  |		    | BE Pods  | ----------- Services	================  |  Ex DB  |
+	------------		    ------------             ------------		  ------------
+
+Let's start with External communication.
+
+
+CLient: 192.168.1.10
+
+
+	------------------------------------------------------------------
+	|		Node: 192.168.1.2				 |
+	|								 |
+	|						 		 |
+	|		--------------------------	 		 |
+	|		|	POD: 10.244.0.2	 |	 		 |
+	|		--------------------------	 		 |
+	|								 |
+	------------------------------------------------------------------
+
+Every Node in k8s has external IP address.
+The client is on the same network.
+
+The Pod has a network: 10.244.0.0
+So is a separate network and the client cannot connect directly to the pod. 
+So we have 2 options:
+	. Connect with ssh to node 192.168.1.2 and then make a curl to get information
+But this inside the k8s and I don't wanna this. I would like to connect from my Client directly to the POD, so I need something in the middle to map the request from our client,
+through the node to the pod.
+
+This is where the k8s service cames into place.
+
+
+
+CLient: 192.168.1.10
+
+
+	------------------------------------------------------------------
+	|		Node: 192.168.1.2				 |
+	|								 |
+	|								 |
+	| --------------------------			 		 |
+	 Port:30008	Service    |	 				 |
+	| --------------------------			 		 |		
+	|			|					 |
+	|			|					 |
+	|			|			 		 |
+	|		--------------------------	 		 |
+	|		|	POD: 10.244.0.2	 |	 		 |
+	|		--------------------------	 		 |
+	|								 |
+	------------------------------------------------------------------
+
+This way the client can connect directly to the pod 
+	. curl http://192.168.1.2:30008
+
+
+So what the service does is listening to requests on a port of the node and then forward the request to the port on the pod running the application.
+This type of service is known as Nodeport Service. So the type of this service is NODEPORT
+
+
+In the type cluster IP the service creates a virtual IP inside the cluster to enable comnmunication between different services, from a FE to a BE for example
+So in this case there is no communication from the outside. 
+
+The third type is Load Balancer, so something likt this
+
+		------------------------------------------------------------------
+		|		Node: 192.168.1.2				 |
+		|								 |
+		|								 |
+		| --------------------------			 		 |
+	 ------	 Port:30007	 	|	 				 |
+	|	| --------------------------			 		 |
+		| --------------------------			 		 |
+ Port 30100  --	 Port:30008		|	 				 |
+	|	| --------------------------			 		 |
+	|	| --------------------------			 		 |
+	-------	 Port:30009		|	 				 |
+		| --------------------------			 		 |
+		|			|					 |
+		|			|					 |
+		|			|			 		 |
+		|		--------------------------	 		 |
+		|		|	POD: 10.244.0.2	 |	 		 |
+		|		--------------------------	 		 |
+		|								 |
+		------------------------------------------------------------------
+
+
+So it will listen on port 30100 and will load balance the requests to other ports.
+
+
+NODE PORT
+========
+Let's take a closer look
+
+
+	------------------------------------------------------------------
+	|		Node: 192.168.1.2				 |
+	|								 |
+	| ClusterIP: 10.106.1.12  (PORT)				 |
+	| --------------------------------		 		 |
+	 Port:30008	Service   Port:80 |--|				 |
+	| --------------------------------   |		 		 |		
+	| (NODE PORT)			     |				 |
+	|				     | 				 |
+	|				     |		 		 |
+	|		--------------------------	 		 |
+	|		|POD: 10.244.0.2  Port:80 | (TARGET PORT)	 |
+	|		--------------------------	 		 |
+	|								 |
+	------------------------------------------------------------------
+
+
+So as you can see thare are three ports involved:
+The port on the POD is 80 and it's named as TARGET PORT, where the service forward the request to. 
+The second one is the port on the service itself, it's simply refered to as the PORT.
+REMEMBER THIS TERMS ARE FROM THE SERVICE POINT OF VIEW.
+
+Inside the cluster the service has it's own IP address and this is called the CLUSTERIP of the service
+
+The third one is the port on the Node, and this is names as the NODE PORT.
+The nodeport by default can be from 30000 - 32767
+
+Let's node take a look at the definition file:
+
+apiVersion: v1
+kind: Service
+metadata:
+	name: myapp-service
+spec:
+	type: NodePort
+	ports:
+		- targetPort: 80
+		  port: 80
+		  nodePort: 30008
+	selector:
+		app: myapp
+		type: front-end
+
+The only required fields is port, if you don't provide a target port it's assumed that there is the same as port.
+If you don't provide a nodePort it will chosen randomly.
+
+As always we use labels selector to connect service to pod.
+
+This is not the case all the time, what will you do when you have multiple pods
+
+
+
+	------------------------------------------------------------------
+	|		Node: 192.168.1.2				 |
+	|								 |
+	| ClusterIP: 10.106.1.12  (PORT)				 |
+	| --------------------------------		 		 |
+	 Port:30008	Service   Port:80 |--|				 |
+	| --------------------------------   |		 		 |		
+	| (NODE PORT)			     |				 |
+	|	 --------------------------- | 				 |
+	|	 |			     		 		 |
+	|	 |	--------------------------	 		 |
+	|	 | ----	|POD: 10.244.0.3  Port:80 | (TARGET PORT)	 |
+	|	 |	--------------------------	 		 |
+	|	 |	--------------------------	 		 |
+	|	 | ----	|POD: 10.244.0.2  Port:80 | (TARGET PORT)	 |
+	|	 |	--------------------------	 		 |
+	|	 |	--------------------------	 		 |
+	|	 | ----	|POD: 10.244.0.4  Port:80 | (TARGET PORT)	 |
+	|		--------------------------	 		 |
+	|								 |
+	------------------------------------------------------------------
+
+In this case we multiple pods running the same web application, I run multiple instance for load balancer porpouse
+They all has the same labels with key app and the value myapp
+
+labels:
+	app: myapp
+
+So in the service will be something:
+
+selector:
+	app: myapp
+
+When the service is created, it looks for the selector, it finds 3 pods and automatically set this 3 pods as possible endpoints from the user. 
+You don't have to do any additional configuration to make this appened.
+The load balancing will use a Random algorithm
+
+
+If the pods are running on different node, k8s automatically create a service which wraps all the node and open the same nodePort on each different node.
+
+
+     --Port: 30008 --			    ------Port: 30008 --	
+     |	------------+-----------------------+----------------  |
+     | 	|	    |			    |		    |  |
+     |	|  POD	POD |			    |	POD 	POD |  |
+     |	|	    |	Service		    |		    |  |		
+     |	|	    |			    | 		    |  |		
+     |	------------+-----------------------+----------------  |
+     |              |			    |		       |		
+     |	NODE 1	    | 			    |	NODE 2	       |	
+     |--------------|			    |-------------------
+
+And in each node the service is responsible to forward the requests from the node port to the POD
+
+
+So we have three cases.
+Single pod on a single node,
+multiple pod on a single node
+multiple pod on multiple node
+
+
+
+
+CLUSTER IP
+========
+
+Let's image we have an application with 3 layer: front-end, back-end, and a key-value database like redis.
+
+
+  	  -----------		-----------		-----------
+  	  |  0.3    |		| 0.2	  |		| 0.4	  |
+Frontend  |   	    |		|	  |		|	  |
+   	  -----------		-----------		-----------
+
+  	  -----------		-----------		-----------
+  	  | 0.5	    |		| 0.6	  |		| 0.7	  |
+Backend   |   	    |		|	  |		|	  |
+   	  -----------		-----------		-----------
+
+
+  	  -----------		-----------		-----------
+  	  | 0.8	    |		| 0.9	  |		| 0.10	  |
+Redis     |   	    |		|	  |		|	  |
+   	  -----------		-----------		-----------
+
+
+Every pod of frontend should communicate with every pod of backend and every pod of backend should communicate with every pod of redis.
+
+You cannot be sure that 0.5 exist forever since that pod could fall and another pod will replace it, with a different ip address.
+
+Let's image front end pod 0.3 should connect to a backend pod? Which pods should connect to? Who maked this decision?
+
+A service in this case can group all the pods and make him the necessary decision about on which backend pod to forward the request of a front end pod
+
+
+  	  -----------		-----------		-----------
+  	  |  0.3    |		| 0.2	  |		| 0.4	  |
+Frontend  |   	    |		|	  |		|	  |
+   	  -----------		-----------		-----------
+
+	  -------------------------------------------------------- 	
+	  |			Service	Backend			 |
+	  --------------------------------------------------------
+  	  -----------		-----------		-----------
+  	  | 0.5	    |		| 0.6	  |		| 0.7	  |
+Backend   |   	    |		|	  |		|	  |
+   	  -----------		-----------		-----------
+
+
+	  -------------------------------------------------------- 	
+	  |			Service	Redis			 |
+	  --------------------------------------------------------
+  	  -----------		-----------		-----------
+  	  | 0.8	    |		| 0.9	  |		| 0.10	  |
+Redis     |   	    |		|	  |		|	  |
+	  -----------		-----------		-----------
+
+
+Thanks to the service each layer can now move and scale as required wihtout impacting communication between the services. Each service receive a name inside the cluster and all the other pod should
+call that service to access that layer of pods. This service as knonwn as CLUSTER IP.
+
+apiVersion: v1
+kind: Service
+metadata:
+	name: back-end
+spec:
+	type: ClusterIP
+	ports:
+		- targetPort: 80 (Is the port where the backend is exposed)
+		  port: 80 (Is the port where the service is exposed)
+	selector:
+		app: myapp
+		type: back-end (The labels of the POD, as always)
+
+ENDPOINTS:
+
+The Endpoint voice in the service means how many pods this service forward the traffic to.
+
+
+
+
+	  -------------------------------------------------------- 	
+	  |			Service	POD			 |	app:FE
+	  --------------------------------------------------------
+  	  -----------		-----------		-----------
+  	  | 0.5	    |		| 0.6	  |		| 0.7	  |
+Pod	  |   	    |		|	  |		|	  |	app:FE
+   	  -----------		-----------		-----------
+
+What the service does is to identify all the pods with the same labels and then redirect the traffic to those pods. 
+
+If we have another pod by accidentaly created. The endpoints will be 4 not 3.
+
+If we make a mistake and does not match the labels the endpoints are 0.
+
+	  -------------------------------------------------------- 	
+	  |			Service	POD			 |	app:FR
+	  --------------------------------------------------------
+  	  -----------		-----------		-----------
+  	  | 0.5	    |		| 0.6	  |		| 0.7	  |
+Pod	  |   	    |		|	  |		|	  |	app:FE
+   	  -----------		-----------		-----------
+
+That's some reason why to investigate the endpoints in the description of a service.
+

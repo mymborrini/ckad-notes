@@ -1,0 +1,67 @@
+LABELS SELECTORS and ANNOTATIONS
+
+Labels and selector are a standard method to group objects or to filter them.
+
+Labels are properties attached to each class
+
+Selectors are created to filter the labels.
+
+We have created a lot of different objects: POD, deployed, Replica Set, Services. For k8s all of this are different objects. 
+
+For k8s you can specify the labels  in the metadata section:
+
+
+apiVersion: v1
+kind: Pod
+metadata: 
+	name: simple-webapp
+	labels:
+		app: App1
+		function: Front-end
+
+spec:
+
+
+To select all the pods with the label you can use it directly in the kubectl get command
+
+	. kubectl get pods --selector app=App1
+
+You can of course use them internally to connect different objects together.
+
+N.B. In case of Deployment and Replica set (for instance), the labels defined in the spec definition are the labels of the pods, the labels defined in the metadata are the labels of the Deployment/ReplicaSet instead
+
+
+In order to create the selector we created the selector matchLabels in the spec, and it has to match the one definedin the pods.
+
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+	name: simple-webapp
+	labels:
+		app: App1
+		function: Front-end
+spec:
+	replicas: 3
+	selector:
+		matchLabels:
+			app: App1
+	template:
+		metadata:
+			labels:
+				app: App1
+				function: Front-end
+		spec:
+			containers:
+				- name: simple-webapp
+				  image: simple-webapp
+
+
+
+As you can see is enough for the selector to match the "app:App1" label in order to be applied to the pod.
+Is not necessary in the selector to specify the "function:Front-end" label to match the pod.
+
+
+ANNOTATIONS:
+While labels and selector are used to group and filter objects, annotations are used to record other details for info-metric purpouse. 
+
+

@@ -1,0 +1,128 @@
+AUTHORIZATION:
+
+Once the user is authenticated what can they do? This is where authorization cames in place.
+
+For example Developers should be able to crud pods, deploy, services ecc... but should not be able to change the admin configuration so they should not be able
+to crud nodes for example.
+
+Third part application (Bots) should receive the minimum permission to perform their operations.
+Or if you have different organisations mapped by different namespaces, you want to restrict the access based on the single organisation's namespace
+
+There are different Authorization Mechanism supported by k8s:
+
+ . Node Authorization
+ . ABAC Authorization
+ . RBAC Authorization
+ . Webhook Authorization
+
+
+NODE:
+
+Let's consider the following example:
+
+	  -------------		-------------
+User ===> | Kube API  |	<=====	| kubelet   |
+	  -------------		-------------
+
+The User will access the Kube API for custom manager purpouses, as well as kubelet.
+Kubelet contact the Kube API to read information about: services, endpoints, nodes, pods and to write information about: node status, pod status, events.
+
+Those requests are handled by a special Authorizer named Node Authorizer. 
+In the previous lecture we discuss about certificates so this kubelet has the following certificate for example:
+
+GROUP:SYSTEM:NODES
+system:node:node01
+
+
+Every request which cames from this group and with the name of system:node:... is authorized to perform particular requests by the Node Authorizer.
+
+
+
+
+EXTERNAL ACCESS FOR THE API
+ABAC: (attributes base access control)
+
+In this case we set a user or a group of user with a set of permission, in this case
+
+dev-user ==> CREATE pod, VIEW pod, DELETE pod
+
+
+You can create a json file like the following to specify permissions
+
+{
+  "kind": "Policy",
+  "spec": {
+	    "user": "dev-user",
+	    "namespace": "*",
+	    "resource": "pods",
+	    "apiGroup: "*"
+   	  }
+}
+
+Or like the following:
+
+{
+  "kind": "Policy",
+  "spec": {
+	    "group": "security",
+	    "namespace": "*",
+	    "resource": "csr",
+	    "apiGroup: "*"
+   	  }
+}
+
+
+
+Everytime you have to change or add permissions you have to change different files each for each user or group. This is really difficult to maintain
+
+
+RBAC: (roles based access control)
+
+Makes ABAC a little bit easier to maintain.
+In this case you define roles, you create a role and associate a set of permissions. For example
+
+Developer Role => CReate Pod, View Pod, Delete Pod
+
+Then associate the user with that role. When you have to change something is enough to chage the role and every user with that particular role will change accordingly.
+
+
+
+OUTSOURCE AUTHORIZATION MECHANISM:
+WEBHOOK
+
+Open Policy Agent for example is suited for this.
+			  2
+      1   -------------	=====>	----------------------
+User ===> | Kube API  |		| Open Policy agent   |
+	  -------------	<=====	----------------------
+			  3	
+
+In this case the Open Policy Agent decide if the user can access the resource or not.
+
+
+There are two more Authorization Mechanism supported by k8s:
+  . AlwaysAllow (allow all requests without performing any authorization)
+  . AlwaysDeny  (deny all requests without performing any authorization)
+
+
+So how does we effectively settled all this stuff?
+Through the authorization-mode in the kube-apiserver execu start. If you don't specify it, it is set to AlwaysAllow by default. You can settled even different authorization-mode comma separated list.
+
+--authorization-mode=Node,RBAC,Webhook
+
+When you have multiple modes configured, your request is authorized in the following way:
+
+	  -------------		-------------		-------------
+User ===> | Node      |	=====>	| RBAC      |    	| Webhook   |
+   ^	  -------------		-------------		-------------
+   |__________________________________|
+
+
+In this case a user perform a request directly on the Node, since the Node Authorizer only check internal request (so only requests from another node) it denys the request. Whenever a mode denied the request 
+it is forward to the other one in the chain. The RBAC makes its test and grant the user to make the requests.
+Authorization is complete and user has access to the requested object WITHOUT contacting the Webhook mechanism.
+
+Everytime a mode denyed a request it it simply forward in the chain and everytime a mode granted a request, the user is authorized without making any other checks
+
+
+

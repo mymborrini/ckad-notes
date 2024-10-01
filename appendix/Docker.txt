@@ -1,0 +1,83 @@
+Commands In Docker:
+ If you run 
+ . docker run ubuntu
+You see that it will run and immediatly stop. The reason is that container are not managed to run OS like VM, the container is thinked to stay alive only if the process inside it is still
+alive. If the process chrash or stoppend for whatever reason the container is stopped.
+
+You can add an instruction
+ . CMD ["ngix"]
+
+CMD stays for command, defines the program that will run in the container when it starts.
+
+In case you don't specify a command the ubuntu image which runs before have a cmd ["bash"] at the end. 
+By default docker does not attach a terminal to a container while it's running, so the bash command don't find a
+terminal and it exited. Since the process that started when the container was created finish, the container stopped working as well.
+
+A way to avoid this is to specify a command after the run command, this way the command will be overriden
+ . docker run ubuntu sleep 5
+In this way sleep way will ovveride the bash command and the container will stay alive for 5 seconds.
+
+But what if I want to have it by default
+In order to make this to happen is enough for us to write a new docker image like:
+
+	FROM Ubuntu
+	CMD sleep 5
+	// or 
+	CMD ["sleep", "5"]
+
+	// do not type (this is wrong) -> command and argument must be two different element in a list
+	CMD ["sleep 5"]
+
+And run the container, maybe with another name: docker run ubuntu-sleeper
+What if we want to ovverride 5 with another number, maybe 10
+
+ . docker run ubuntu-sleeper sleep 10
+
+This will work since we override the command like we did before.
+But what if we want to write something like this:
+
+ . docker run ubuntu-sleeper 10
+
+So we don't want to override the command but we want to pass the seconds of sleep as parameter
+That's where the entrypoint command comes into places
+
+	FROM Ubuntu
+	ENTRYPOINT ["sleep"]
+
+In this case, since you specified it as an entrypoint, docker will append whatever information you pass it after run. So in the last case it will append 10 to sleep.
+	. So that's the difference in case of command the parameter/s you pass after docker run will substitute the command
+	. In case of entrypoint the parameter/ you pass after docker run will be appended to the entrypoint
+
+In the second case if I run docker run ubuntu-sleeper without specify anything this will raise an exception. So how can I specify a default argument
+	
+	FROM Ubuntu
+	ENTRYPOINT ["sleep"]
+	CMD ["5"]
+
+By adding a command after the entrypoint it will create the command sleep 5 and if you type something after the docker run it will simply substitute the command.
+
+You can even override the entrypoint by typing something like:
+	docker run --entrypoint sleep2.0 ubuntu-sleeper 10
+
+The result of this will be:
+ 	. sleep2.0 10
+
+
+
+SECURITY:
+Unlike wm, container are not completed isolated from the host. The host has a number of process included the docker daemon.  
+Container are isolated using namespaces. All the process in the container run on the host but in their own namespace. Container by default cannot see anything outside of it
+so outside the namepsaces, but since it use the host, if you do ps aux you will see the process in the docker container running.
+
+Users in context stuff security:
+The docker host has a root user togheter with a number of not root user. By default docker use the root user. 
+If you don't want that the root user use this container you can specify imperaatively or into the file declaration (the docker imager: Dockerfile) .
+
+But what happened when you run a container as the root user, is the root user inside a container the same root user of the OS.
+Can the process inside the container do all the stuff that the root user in the system?
+Docker enables a set of security rules which limits the permission of the root user in the container. 
+Every user has a list of capabilities, which indicates the permissions on OS processes or net binding, net broadcast ...ecc
+In general Docker limits his root user capabilities.
+
+
+	

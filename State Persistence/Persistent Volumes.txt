@@ -1,0 +1,52 @@
+PERSISTENT VOLUMES:
+
+When we created volumes in the previous section we make them in the pod configuration file. The volume should therefore be configured in each pod definition file. 
+But this is not the best solution, it will be better to manage the storage centrally. 
+
+A persisten volume is a cluster wide pull of storage volume configured by an administrator to be used by user deploying application on the cluster.
+
+
+		
+---------- ---------- ----------- ---------- ---------- -----------		 		 
+|  	 | |        | |	   	| |  	   | |        | |	  |		 
+| Pod  1 | | Pod  2 | |	Pod  3  | | Pod  4 | | Pod  5 | | Pod  6  | --------------------	 	 
+---------- ---------- ----------- ---------- ---------- -----------			|
+    |	          |		| 	  |	      |-----------			|
+    |		  |		------|   -----------|            |			|
+-------------------------------------------------------------------------------------------------
+|		|		|		|		|		|		|
+|	PV	|	PV	|	PV	|	PV	|	PV	|	PV      |
+|		|		|		|		|		|		|
+|		|		|		|		|		|		|
+|		|		|		|		|		|		|
+-------------------------------------------------------------------------------------------------
+					Persistent Volumes (PVs)
+
+The user can now select storage from this pool using Persistent Volume Claim (PVC)
+
+
+apiVersion: v1
+kind: PersistentVolume
+metadata: 
+	name: pv-vol1
+spec:
+	accessModes:
+		- ReadWriteOnce
+	capacity:
+		storage: 1Gi
+	# This option is not to be used in production environment see Volumes part and the discussion about multipel nodes storage
+	hostPath:
+		path: /tmp/data
+	# In production for example
+	awsElasticBlockStore:
+		volumeID: <volume-id>
+		fsType: ext4
+
+
+
+AccessModes defines how volumes should be mounted on a host, it could be:
+- ReadOnlyMany
+- ReadWriteOnce
+- ReadWriteMany
+
+capacity specify the amount of storage for this persistent volumes

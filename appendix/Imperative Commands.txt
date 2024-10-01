@@ -1,0 +1,86 @@
+Imperative commands are useful especially in the exam since allow us to do task very quick without working with definition files which requires more time.
+
+There are two options that come in handy while working with imperative commands.
+
+--dry-run
+
+By default as soon as the command is run the resource will be created. If you simply want to test your command, use the --dry-run=client option. This will not 
+create the resource, instead, tell you whether the resource can be created and if your commands is right
+
+-o yaml 
+
+This will output the resource definition in YAML format on screen.
+
+You can use the above two in combination to generate a resource definition file quickly, that you can then modify and create resources as required, instead of
+creating a file from scratch. This is true for every resource:
+
+ . CREATE NGINX POD
+kubectl run nginx --image=nginx
+
+ . GENERATE POD MANIFEST FILE
+kubectl run nginx --image=nginx --dry-run=client -o yaml
+
+ . CREATE A DEPLOYMENT
+kubectl create deployment --image=nginx nginx
+
+ . GENERATE A DEPLOYMENT YAML FILE 
+kubectl create deployment --image=nginx nginx --dry-run=client -o yaml
+
+ . CREATE A SERVICE NAMED NGINX OF TYPE NODEPORT TO EXPOSE POD NGINX'S PORT 80 ON PORT 30080 ON THE NODES
+kubectl expose pod nginx --port=80 --name nginx-service --type=NodePort --dry-run=client -o yaml
+
+Expose is really useful since it will take automatically the right selector for that deployment 
+
+kubectl create deployment nginx --image=nginx --dry-run=client -o yaml > nginx-deployment.yaml
+
+
+In general If you need any hint for imperative command, remember you can use:
+ . kubectl run --help 
+
+In order to acquire a list of commands that you can specify in running your pod.
+So for example if you need to add labels to a pod
+ . kubectl run hazelcast --image=hazelcast/hazelcast --labels="app=hazelcast,env=prod"
+
+Or if you have to expose your container in a pod:
+ . kubectl run hazelcast --image=hezelcast/hazelcast --port=5701
+The last command is not using a service but specify on which port the container will run the application
+
+If you need to create a service togheter with the pod, just type
+ . kubectl run httpd --image=httpd:alpine --port=80 --expose=true
+
+
+ . To see the log of an application you can type:
+	. k logs <pod-name>
+
+ . When they ask you to look at the environment, remember to look at the nodes too.
+ . --all-namespaces in short is -A in particular the following command is really poweful:
+	. k get pods -A 
+ . --namespace <namespace-name> in short is -n <namespace-name>
+
+
+To check the roles just type
+k get roles 
+and the role bindings
+k get rolebindings
+
+you can describe them as well
+
+
+In order to get all the obejcts you can simply type:
+
+	. kubectl get all
+
+So for example if you want to fetch out all the object which has a different labels
+
+	. kubectl get all --selector env=Prod
+
+If you have more labels in and condition
+
+	. kubectl get all --selector env=Prod,tier=Frontend
+
+If the research takes a lot of rows, and the answer is how many of them just type:
+
+	. kubectl get all --selector env=Prod,tier=Frontend --no-headers | wc -l
+
+wc stays for word count, -l specify the LINE, and the --no-headers is necessary otherwise the header itself will be count as a line as well.
+

@@ -1,0 +1,97 @@
+Get a list of all pods
+
+ - kubectl get pods
+
+
+Get description of a particular pod and search with grep for particular
+property (the -n option show the number of the line)
+
+ - kubectl describe pod <podId> | grep -n '<charStringToSearch>'
+
+
+In order to cerate a pod for nginx for example just type:
+
+ - kubectl run nginx --image=nginx
+
+
+In order to run a file description:
+ 
+ - kubectl create -f <file.yaml> | <file.yml>
+
+
+Delete a pod 
+
+ - kubectl delete pod <podId>
+
+For a brief documentation of kubernetes client just type
+
+ - kubectl run --help
+
+
+Instead of pod description if you need more information about your pods just
+type
+
+ - kubectl get pods -o wide
+
+
+In order to create a yml configuration file from a pod of kubectl, you can do
+it by typing the following
+
+
+ - kubectl run redis --image=redis --dry-run=client -o yaml (this will show
+   the yml file on terminal like a cat command.)
+
+ - kubectl run redis --image=redis --dry-run=client -o yaml > redis.yaml (this
+   will create a file redis.yaml with all the configuration)
+
+If you just want to edit a pod without changing the file, just run
+
+ - kubectl edit pod <podId>
+
+You can even generate a configuration file from an existing pod:
+
+ - kubectl get pod <podId> -o yaml > pod-definition.yaml
+
+Remember, you CANNOT edit specification of an existing POD other than the below:
+ - spec.containers[*].image
+ - spec.initContainers[*].image
+ - spec.activeDeadlineSeconds
+ - spec.tolerations
+
+For example you cannot edit the environment variables, service accounts ecc... But if you really want you have 2 options
+The first one is a little bit dirty in my opinion
+
+ - kubectl edit pod <podName>
+
+When you try to save it, you will denied. This is because you are attempting to edit a field on the pod that is not editable. But you create a tmp file in tmp/
+So you simply delete the pod and then recreate it using that temporary file
+
+The second option is a little bit more cleaner, export the pod configuration in a file yaml, edit the file and delete/create the pod with the new file
+ - kubectl get pod <podName> -o yaml > fileName.yaml
+ - vi fileName.yaml
+ - kubectl delete pod <podNam>
+ - kubectl create -f fileName.yaml
+
+To check the state of pods that kubernetes is creating:
+ . crictl pods
+
+
+A pod yaml file example could be like the following:
+apiVersion: 1v
+
+kind: Pod
+
+metadata:
+  name: redis-demo
+  labels:
+    type: database
+    app: redis-demo
+
+spec: 
+ containers:
+   - name: redis
+     image: redis
+
+
+
+ 

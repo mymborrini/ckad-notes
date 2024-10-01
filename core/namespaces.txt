@@ -1,0 +1,81 @@
+Namespaces:
+
+Namspaces like the name suggest indicates how to refers to other services. A service in a namespace can refer to a service in another namespace but the syntax will be different then the one used from a service 
+to refer another service from the same namespace.
+Every namespace has a limited amount of resources that they can use.
+
+When we create pods deployments ecc we create them in a namespace named "default", which is a namespace created by kubernetes automatically when the cluster is first set up. 
+Kubernets creates other two namespaces for interal porpouse, another reason is to isolate the services and protect them from the user. This namespace is called "kube-system"
+"kube-public" is another namespaces and is where resources which would be made available for all users are created. 
+If your environment is small or you're playing around with a small cluster you cannot care about namespaces. 
+However when you grow up, you may want to use the same cluster for dev and production environment, in that case it could be useful to consider the use of namespaces. In order to isolate  dev and production.
+So when you are working with dev you are sure to not modify resources in production.
+
+Every namespaces has its own set of policy which defines who do what.
+You can define quota of resources for each namespaces, so each namespace don't use more than a certain amount of resource.
+
+The resource inside a namespace can referes to each other simply by calling the name of the resource
+for example
+
+- mysql.connect("db-service")
+
+But if from prod namespace you want to connect to the database in a dev namespace, it will be something like this:
+
+- mysql.connect("db-service.dev.svc.cluster.local")
+
+You can do this because when a service is created a dns entry is automatically created in this format
+Where
+ . cluser.local -> Is the default domain name of the kubernetes cluster
+ . svc -> Is the subdomain of service
+ . dev -> is the namespace
+ . db-service -> Is the service name
+
+Let's start to see at some operational command of the namespaces:
+When you type kubectl get pods, it simply shows you the pods in the default namespace. 
+The following command shows how check pods in a different namespace
+
+ - kubectl get pods --namespace=kube-system 
+
+
+The same is true for the file creation
+ 
+ - kubectl create -f pod-definition.yml --namespace=dev
+
+If you want that a particular pod is created always in a particulare namespace, just add the namespace property in the metadata
+
+ metadata:
+	name:
+	namespace: dev
+	labels:
+		app:
+		type:
+
+
+A way to create a namespace is to use a file.yml or to simply type:
+
+ - kubectl create namespace dev
+
+If we want to switch to a namespace permanentely so we don't have to specify the namespace in the command anymore
+
+ - kubectl config set-context --current --namespace=dev
+
+In order to see all pods in all namespaces you can simpy use --all-namespaces options so something like this:
+
+ - kubectl get pods --all-namespaces
+
+
+Context are used to manage multiple cluster from the same management system, and we discuss it later
+
+To limit resources in a namespace create a resource quota
+
+"ns" characther is a abbreviation for namespaces like "rs" is for replica set.
+
+The namespace yaml file defintion looks something like this:
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+
+
+
